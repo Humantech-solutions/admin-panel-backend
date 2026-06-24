@@ -4,7 +4,7 @@ const { sendEmail } = require('../utils/emailUtil');
 // SUBMIT CONTACT FORM
 exports.submitContact = async (req, res) => {
   try {
-    const { name, email, subject, message, pageTitle, pageUrl, category, project, companyName } = req.body;
+    const { name, email, phone, subject, message, pageTitle, pageUrl, category, project, companyName } = req.body;
     
     const resolvedProject = project || 'nabhira';
     const resolvedCompanyName = companyName || 'Nabhira Technologies';
@@ -12,6 +12,7 @@ exports.submitContact = async (req, res) => {
     const newContact = new Contact({
       name,
       email,
+      phone,
       subject,
       message,
       pageTitle,
@@ -84,18 +85,22 @@ exports.submitContact = async (req, res) => {
               <td style="padding: 10px; color: #11253e;"><a href="mailto:${email}">${email}</a></td>
             </tr>
             <tr style="background-color: #f9f9f9;">
+              <td style="padding: 10px; color: #999; font-size: 12px; text-transform: uppercase;">Phone</td>
+              <td style="padding: 10px; color: #11253e;">${phone || 'Not provided'}</td>
+            </tr>
+            <tr>
               <td style="padding: 10px; color: #999; font-size: 12px; text-transform: uppercase;">Subject</td>
               <td style="padding: 10px; color: #11253e;">${subject || 'N/A'}</td>
             </tr>
-            <tr>
+            <tr style="background-color: #f9f9f9;">
               <td style="padding: 10px; color: #999; font-size: 12px; text-transform: uppercase; vertical-align: top;">Message</td>
               <td style="padding: 10px; color: #11253e; line-height: 1.5;">${message}</td>
             </tr>
-            <tr style="background-color: #f9f9f9;">
+            <tr>
               <td style="padding: 10px; color: #999; font-size: 12px; text-transform: uppercase;">Category</td>
               <td style="padding: 10px; color: #11253e;">${category || 'Website General Form'}</td>
             </tr>
-            <tr>
+            <tr style="background-color: #f9f9f9;">
               <td style="padding: 10px; color: #999; font-size: 12px; text-transform: uppercase;">Source Page</td>
               <td style="padding: 10px; color: #11253e;">
                 <a href="${pageUrl || '#'}" style="color: #f99d1c; text-decoration: none;">${pageTitle || 'Visit Page'}</a>
