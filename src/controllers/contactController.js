@@ -4,8 +4,11 @@ const { sendEmail } = require('../utils/emailUtil');
 // SUBMIT CONTACT FORM
 exports.submitContact = async (req, res) => {
   try {
-    const { name, email, subject, message, pageTitle, pageUrl, category } = req.body;
+    const { name, email, subject, message, pageTitle, pageUrl, category, project, companyName } = req.body;
     
+    const resolvedProject = project || 'nabhira';
+    const resolvedCompanyName = companyName || 'Nabhira Technologies';
+
     const newContact = new Contact({
       name,
       email,
@@ -13,7 +16,9 @@ exports.submitContact = async (req, res) => {
       message,
       pageTitle,
       pageUrl,
-      category: category
+      category: category,
+      project: resolvedProject,
+      companyName: resolvedCompanyName
     });
 
     await newContact.save();
@@ -21,7 +26,8 @@ exports.submitContact = async (req, res) => {
     // 1. Send "Thank You" email to the user
     await sendEmail({
       to: email,
-      subject: `Thank you for contacting Nabhira Technologies`,
+      fromName: resolvedCompanyName,
+      subject: `Thank you for contacting ${resolvedCompanyName}`,
       html: `
         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff;">
           <div style="text-align: center; padding-bottom: 20px;">
@@ -32,7 +38,7 @@ exports.submitContact = async (req, res) => {
           
           <p style="color: #333; font-size: 16px; line-height: 1.6;">
             We have received your message regarding <strong>"${subject || 'General Inquiry'}"</strong>. 
-            Thank you for your interest in Nabhira Technologies. 
+            Thank you for your interest in ${resolvedCompanyName}. 
           </p>
           
           <p style="color: #333; font-size: 16px; line-height: 1.6;">
@@ -42,7 +48,7 @@ exports.submitContact = async (req, res) => {
           
           <div style="margin: 30px 0; border-top: 1px solid #eee; padding-top: 20px;">
             <p style="color: #777; font-size: 14px; margin-bottom: 5px;">Best Regards,</p>
-            <p style="color: #11253e; font-weight: bold; font-size: 16px; margin: 0;">The Nabhira Team</p>
+            <p style="color: #11253e; font-weight: bold; font-size: 16px; margin: 0;">The ${resolvedCompanyName} Team</p>
             <p style="color: #f99d1c; font-size: 12px; margin-top: 5px;">Innovating for a better tomorrow.</p>
           </div>
           
@@ -53,11 +59,12 @@ exports.submitContact = async (req, res) => {
     });
 
     // 2. Trigger automated notification email to admin
-    const adminLink = `http://localhost:3000/admin/dashboard/contact-form${category ? `?category=${encodeURIComponent(category)}` : ""}`;
+    const adminLink = `http://localhost:3000/admin/dashboard/contact-form?project=${resolvedProject}${category ? `&category=${encodeURIComponent(category)}` : ""}`;
     
     await sendEmail({
-      to: 'deepsikha@hutechsolutions.com',
-      subject: `New Lead: User inquiry from ${pageTitle || 'Website'}`,
+      to: 'muthuprabha@hutechsolutions.com',
+      fromName: `${resolvedCompanyName} Admin Portal`,
+      subject: `[${resolvedCompanyName}] New Lead: User inquiry from ${pageTitle || 'Website'}`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
           <h2 style="color: #11253e; border-bottom: 2px solid #f99d1c; padding-bottom: 10px;">New Contact Inquiry Received</h2>
@@ -100,7 +107,7 @@ exports.submitContact = async (req, res) => {
           </div>
           
           <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="font-size: 11px; color: #aaa;">This notification was sent automatically from Nabhira CRM.</p>
+          <p style="font-size: 11px; color: #aaa;">This notification was sent automatically from ${resolvedCompanyName} CRM.</p>
         </div>
       `
     });
@@ -113,11 +120,13 @@ exports.submitContact = async (req, res) => {
 };
 
 
-// GET ALL CONTACTS (with optional category filter)
+// GET ALL CONTACTS (with optional category and project filter)
 exports.getAllContacts = async (req, res) => {
   try {
-    const { category } = req.query;
-    const filter = category ? { category } : {};
+    const { category, project } = req.query;
+    const filter = {};
+    if (category) filter.category = category;
+    if (project) filter.project = project;
     
     const contacts = await Contact.find(filter).sort({ submittedAt: -1 });
     res.json({ success: true, contacts });

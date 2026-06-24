@@ -30,6 +30,14 @@ const careerSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  project: {
+    type: String,
+    required: true
+  },
+  companyName: {
+    type: String,
+    required: true
+  },
   appliedAt: {
     type: Date,
     default: Date.now

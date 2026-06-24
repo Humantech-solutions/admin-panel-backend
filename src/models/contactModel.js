@@ -35,6 +35,14 @@ const contactSchema = new mongoose.Schema({
     enum: ['New', 'Contacted', 'Closed'],
     default: 'New'
   },
+  project: {
+    type: String,
+    required: true
+  },
+  companyName: {
+    type: String,
+    required: true
+  },
   submittedAt: {
     type: Date,
     default: Date.now
