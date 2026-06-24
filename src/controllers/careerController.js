@@ -46,8 +46,10 @@ exports.submitApplication = async (req, res) => {
     await newApplication.save();
 
     // Trigger automated notification email to admin
-    const adminLink = `http://localhost:3000/admin/dashboard/career?project=${resolvedProject}`;
-    const resumeDownloadLink = `http://localhost:8000${resumePath}`;
+    const adminUrl = process.env.ADMIN_URL || 'http://localhost:3000';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
+    const adminLink = `${adminUrl}/admin/dashboard/career?project=${resolvedProject}`;
+    const resumeDownloadLink = `${backendUrl}${resumePath}`;
     
     await sendEmail({
       to: 'muthuprabha@hutechsolutions.com',
@@ -125,11 +127,12 @@ exports.submitBrochureRequest = async (req, res) => {
     await newMail.save();
 
     // Trigger automated email
+    const brochureUrl = process.env.BROCHURE_URL || 'http://localhost:3002';
     const brochureLink = resolvedProject === 'hutech' 
-      ? "http://localhost:3002/Hutech_Careers_Brochure.pdf" 
+      ? `${brochureUrl}/Hutech_Careers_Brochure.pdf` 
       : resolvedProject === 'hulabs'
-      ? "http://localhost:3002/Hulabs_Careers_Brochure.pdf"
-      : "http://localhost:3002/Nabhira_Careers_Brochure.pdf"; 
+      ? `${brochureUrl}/Hulabs_Careers_Brochure.pdf`
+      : `${brochureUrl}/Nabhira_Careers_Brochure.pdf`; 
 
     await sendEmail({
       to: email,

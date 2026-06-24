@@ -16,7 +16,8 @@ exports.submitSalesBrochure = async (req, res) => {
     await newMail.save();
 
     // Trigger automated email
-    const brochureLink = "http://localhost:3002/Nabhira_Solutions_Brochure.pdf"; // Reusing the same dummy for now or specific one if available
+    const brochureUrl = process.env.BROCHURE_URL || 'http://localhost:3002';
+    const brochureLink = `${brochureUrl}/Nabhira_Solutions_Brochure.pdf`; // Reusing the same dummy for now or specific one if available
     await sendEmail({
       to: email,
       subject: `Brochure: ${pageTitle} | Nabhira Technologies`,

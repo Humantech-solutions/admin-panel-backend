@@ -59,7 +59,8 @@ exports.submitContact = async (req, res) => {
     });
 
     // 2. Trigger automated notification email to admin
-    const adminLink = `http://localhost:3000/admin/dashboard/contact-form?project=${resolvedProject}${category ? `&category=${encodeURIComponent(category)}` : ""}`;
+    const adminUrl = process.env.ADMIN_URL || 'http://localhost:3000';
+    const adminLink = `${adminUrl}/admin/dashboard/contact-form?project=${resolvedProject}${category ? `&category=${encodeURIComponent(category)}` : ""}`;
     
     await sendEmail({
       to: 'muthuprabha@hutechsolutions.com',
