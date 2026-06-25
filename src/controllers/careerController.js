@@ -45,7 +45,43 @@ exports.submitApplication = async (req, res) => {
 
     await newApplication.save();
 
-    // Trigger automated notification email to admin
+    // 1. Send "Thank You" confirmation email to the applicant (user)
+    await sendEmail({
+      to: email.trim(),
+      fromName: `${resolvedCompanyName} Careers`,
+      subject: `Application Received: Thank you for applying to ${resolvedCompanyName}`,
+      html: `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff;">
+          <div style="text-align: center; padding-bottom: 20px;">
+            <h2 style="color: #11253e; margin: 0;">Application Received</h2>
+          </div>
+          
+          <p style="color: #333; font-size: 16px; line-height: 1.6;">Hi <strong>${name}</strong>,</p>
+          
+          <p style="color: #333; font-size: 16px; line-height: 1.6;">
+            Thank you for applying for a career opportunity with <strong>${resolvedCompanyName}</strong>.
+          </p>
+          
+          <p style="color: #333; font-size: 16px; line-height: 1.6;">
+            We have successfully received your job application and resume/CV. Our recruitment team is currently reviewing applications and will contact you directly if your qualifications and experience match our requirements.
+          </p>
+          
+          <p style="color: #333; font-size: 16px; line-height: 1.6;">
+            We appreciate your interest in joining our team and wish you the best of luck in your job search!
+          </p>
+          
+          <div style="margin: 30px 0; border-top: 1px solid #eee; padding-top: 20px;">
+            <p style="color: #777; font-size: 14px; margin-bottom: 5px;">Best Regards,</p>
+            <p style="color: #11253e; font-weight: bold; font-size: 16px; margin: 0;">The ${resolvedCompanyName} Careers Team</p>
+          </div>
+          
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+          <p style="font-size: 11px; color: #aaa; text-align: center;">This is an automated response. Please do not reply directly to this email.</p>
+        </div>
+      `
+    });
+
+    // 2. Trigger automated notification email to admin
     const adminUrl = process.env.ADMIN_URL || 'http://localhost:3000';
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
     const adminLink = `${adminUrl}/admin/dashboard/career?project=${resolvedProject}`;
