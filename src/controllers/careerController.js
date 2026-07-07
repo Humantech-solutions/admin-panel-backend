@@ -1,4 +1,5 @@
 const Career = require('../models/careerModel');
+const Company = require('../models/companyModel');
 const { sendEmail } = require('../utils/emailUtil');
 
 // SUBMIT APPLICATION
@@ -28,7 +29,13 @@ exports.submitApplication = async (req, res) => {
     }
 
     const resolvedProject = project || 'nabhira';
-    const resolvedCompanyName = companyName || 'Nabhira Technologies';
+    
+    // Dynamically lookup company in database
+    const company = await Company.findOne({ slug: resolvedProject.toLowerCase() });
+    
+    const resolvedCompanyName = company ? company.name : (companyName || 'Nabhira Technologies');
+    const adminNotificationEmail = company ? company.adminEmail : 'muthuprabha@hutechsolutions.com';
+    const emailFromName = company ? (company.fromEmailName || company.name) : resolvedCompanyName;
     
     const resumePath = `/uploads/resumes/${req.file.filename}`;
     
@@ -40,7 +47,8 @@ exports.submitApplication = async (req, res) => {
       pageUrl: pageUrl.trim(),
       project: resolvedProject,
       companyName: resolvedCompanyName,
-      resume: resumePath
+      resume: resumePath,
+      companyId: company ? company._id : undefined
     });
 
     await newApplication.save();
@@ -48,7 +56,7 @@ exports.submitApplication = async (req, res) => {
     // 1. Send "Thank You" confirmation email to the applicant (user)
     await sendEmail({
       to: email.trim(),
-      fromName: `${resolvedCompanyName} Careers`,
+      fromName: `${emailFromName} Careers`,
       subject: `Application Received: Thank you for applying to ${resolvedCompanyName}`,
       html: `
         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff;">
@@ -88,7 +96,7 @@ exports.submitApplication = async (req, res) => {
     const resumeDownloadLink = `${backendUrl}${resumePath}`;
     
     await sendEmail({
-      to: 'muthuprabha@hutechsolutions.com',
+      to: adminNotificationEmail,
       fromName: `${resolvedCompanyName} Careers`,
       subject: `New Job Application Received: ${name} (${resolvedCompanyName})`,
       html: `
@@ -148,7 +156,12 @@ exports.submitBrochureRequest = async (req, res) => {
     const { name, email, pageTitle, pageUrl, project, companyName } = req.body;
     
     const resolvedProject = project || 'nabhira';
-    const resolvedCompanyName = companyName || 'Nabhira Technologies';
+    
+    // Dynamically lookup company in database
+    const company = await Company.findOne({ slug: resolvedProject.toLowerCase() });
+    
+    const resolvedCompanyName = company ? company.name : (companyName || 'Nabhira Technologies');
+    const emailFromName = company ? (company.fromEmailName || company.name) : resolvedCompanyName;
     
     const newMail = new Career({
       name,
@@ -157,7 +170,8 @@ exports.submitBrochureRequest = async (req, res) => {
       pageUrl,
       type: 'brochure',
       project: resolvedProject,
-      companyName: resolvedCompanyName
+      companyName: resolvedCompanyName,
+      companyId: company ? company._id : undefined
     });
 
     await newMail.save();
@@ -172,7 +186,7 @@ exports.submitBrochureRequest = async (req, res) => {
 
     await sendEmail({
       to: email,
-      fromName: `${resolvedCompanyName} Talent Team`,
+      fromName: `${emailFromName} Talent Team`,
       subject: `Your ${resolvedCompanyName} Careers Brochure`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
@@ -199,8 +213,24 @@ exports.submitBrochureRequest = async (req, res) => {
 exports.getAllApplications = async (req, res) => {
   try {
     const { project } = req.query;
-    const filter = project ? { project } : {};
-    const applications = await Career.find(filter).sort({ appliedAt: -1 });
+    const filter = {};
+    
+    if (project) {
+      // Resolve company slug to companyId for indexed search
+      const company = await Company.findOne({ slug: project.toLowerCase() }).lean();
+      if (company) {
+        filter.companyId = company._id;
+      } else {
+        // Fallback for non-migrated/legacy data or missing company slugs
+        filter.project = project;
+      }
+    }
+    
+    const applications = await Career.find(filter)
+      .populate('companyId', 'name slug')
+      .sort({ appliedAt: -1 })
+      .lean(); // Optimization: plain JS objects
+
     res.json({ success: true, applications });
   } catch (error) {
     console.error("Fetch error:", error);
@@ -211,7 +241,7 @@ exports.getAllApplications = async (req, res) => {
 // GET SINGLE APPLICATION
 exports.getApplicationById = async (req, res) => {
   try {
-    const application = await Career.findById(req.params.id);
+    const application = await Career.findById(req.params.id).populate('companyId', 'name slug').lean();
     if (!application) {
       return res.status(404).json({ success: false, message: "Application not found" });
     }

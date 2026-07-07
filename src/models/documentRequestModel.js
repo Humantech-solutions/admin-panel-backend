@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const careerSchema = new mongoose.Schema({
+const documentRequestSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true
@@ -9,24 +9,15 @@ const careerSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  linkedin: {
+  phone: {
     type: String,
     required: false
   },
-  type: {
-    type: String,
-    enum: ['application', 'brochure'],
-    default: 'application'
-  },
-  resume: {
-    type: String, // This will be the file path or identifier
-    required: false
-  },
-  pageTitle: {
+  documentName: {
     type: String,
     required: true
   },
-  pageUrl: {
+  document: {
     type: String,
     required: true
   },
@@ -43,14 +34,15 @@ const careerSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  appliedAt: {
+  submittedAt: {
     type: Date,
     default: Date.now
   }
 }, { timestamps: true });
 
-// Optimize indexing for dynamic filters
-careerSchema.index({ companyId: 1 });
-careerSchema.index({ companyId: 1, createdAt: -1 });
+// Optimize indexing for fast dashboard lookups and filtering queries
+documentRequestSchema.index({ companyId: 1 });
+documentRequestSchema.index({ companyId: 1, createdAt: -1 });
+documentRequestSchema.index({ email: 1 });
 
-module.exports = mongoose.model('Career', careerSchema);
+module.exports = mongoose.model('DocumentRequest', documentRequestSchema);
