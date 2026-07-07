@@ -2,49 +2,46 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Ensure upload directory exists
-const uploadDir = path.join(__dirname, '../../uploads/resumes');
+// Ensure uploads/documents directory exists
+const uploadDir = path.join(__dirname, '../../uploads/documents');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Multer storage configuration
+// Storage setup
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    // Generate unique name: resume-timestamp-random.extension
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
-    cb(null, `resume-${uniqueSuffix}${ext}`);
+    cb(null, `document-${uniqueSuffix}${ext}`);
   }
 });
 
-// File filter (PDF, DOC, DOCX)
+// Filter allowed file formats
 const fileFilter = (req, file, cb) => {
-  const allowedExtensions = ['.pdf', '.doc', '.docx'];
+  const allowedExtensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.csv', '.txt', '.zip', '.png', '.jpg', '.jpeg'];
   const ext = path.extname(file.originalname).toLowerCase();
   
   if (allowedExtensions.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error('Only .pdf, .doc, and .docx formats are allowed'), false);
+    cb(new Error(`Allowed formats: ${allowedExtensions.join(', ')}`), false);
   }
 };
 
-// Initialize multer
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 2 * 1024 * 1024 // 2 MB
+    fileSize: 10 * 1024 * 1024 // 10 MB limit for documents
   }
 });
 
-// Middleware wrapper for error handling
-const handleResumeUpload = (req, res, next) => {
-  const uploadSingle = upload.single('resume');
+const handleDocumentUpload = (req, res, next) => {
+  const uploadSingle = upload.single('document');
 
   uploadSingle(req, res, (err) => {
     if (err) {
@@ -52,7 +49,7 @@ const handleResumeUpload = (req, res, next) => {
         if (err.code === 'LIMIT_FILE_SIZE') {
           return res.status(400).json({
             success: false,
-            message: 'File too large. Maximum size allowed is 2MB.'
+            message: 'File too large. Maximum size allowed is 10MB.'
           });
         }
         return res.status(400).json({
@@ -65,8 +62,14 @@ const handleResumeUpload = (req, res, next) => {
         message: err.message
       });
     }
+
+    // If a physical file was uploaded, set req.body.document to the relative file path URL
+    if (req.file) {
+      req.body.document = `/uploads/documents/${req.file.filename}`;
+    }
+    
     next();
   });
 };
 
-module.exports = handleResumeUpload;
+module.exports = handleDocumentUpload;

@@ -1,4 +1,5 @@
 const Contact = require('../models/contactModel');
+const Company = require('../models/companyModel');
 const { sendEmail } = require('../utils/emailUtil');
 
 // SUBMIT CONTACT FORM
@@ -7,7 +8,13 @@ exports.submitContact = async (req, res) => {
     const { name, email, phone, subject, message, pageTitle, pageUrl, category, project, companyName } = req.body;
     
     const resolvedProject = project || 'nabhira';
-    const resolvedCompanyName = companyName || 'Nabhira Technologies';
+    
+    // Dynamically lookup the company in the database
+    const company = await Company.findOne({ slug: resolvedProject.toLowerCase() });
+    
+    const resolvedCompanyName = company ? company.name : (companyName || 'Nabhira Technologies');
+    const adminNotificationEmail = company ? company.adminEmail : 'muthuprabha@hutechsolutions.com';
+    const emailFromName = company ? (company.fromEmailName || company.name) : resolvedCompanyName;
 
     const newContact = new Contact({
       name,
@@ -19,7 +26,8 @@ exports.submitContact = async (req, res) => {
       pageUrl,
       category: category,
       project: resolvedProject,
-      companyName: resolvedCompanyName
+      companyName: resolvedCompanyName,
+      companyId: company ? company._id : undefined
     });
 
     await newContact.save();
@@ -27,7 +35,7 @@ exports.submitContact = async (req, res) => {
     // 1. Send "Thank You" email to the user
     await sendEmail({
       to: email,
-      fromName: resolvedCompanyName,
+      fromName: emailFromName,
       subject: `Thank you for contacting ${resolvedCompanyName}`,
       html: `
         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff;">
@@ -64,7 +72,7 @@ exports.submitContact = async (req, res) => {
     const adminLink = `${adminUrl}/admin/dashboard/contact-form?project=${resolvedProject}${category ? `&category=${encodeURIComponent(category)}` : ""}`;
     
     await sendEmail({
-      to: 'muthuprabha@hutechsolutions.com',
+      to: adminNotificationEmail,
       fromName: `${resolvedCompanyName} Admin Portal`,
       subject: `[${resolvedCompanyName}] New Lead: User inquiry from ${pageTitle || 'Website'}`,
       html: `
@@ -125,16 +133,29 @@ exports.submitContact = async (req, res) => {
   }
 };
 
-
 // GET ALL CONTACTS (with optional category and project filter)
 exports.getAllContacts = async (req, res) => {
   try {
     const { category, project } = req.query;
     const filter = {};
     if (category) filter.category = category;
-    if (project) filter.project = project;
     
-    const contacts = await Contact.find(filter).sort({ submittedAt: -1 });
+    if (project) {
+      // Resolve company slug to companyId for indexed search
+      const company = await Company.findOne({ slug: project.toLowerCase() }).lean();
+      if (company) {
+        filter.companyId = company._id;
+      } else {
+        // Fallback for non-migrated/legacy data or missing company slugs
+        filter.project = project;
+      }
+    }
+    
+    const contacts = await Contact.find(filter)
+      .populate('companyId', 'name slug')
+      .sort({ submittedAt: -1 })
+      .lean(); // Optimization: returns plain JS objects
+
     res.json({ success: true, contacts });
   } catch (error) {
     console.error("Fetch error:", error);
@@ -145,7 +166,7 @@ exports.getAllContacts = async (req, res) => {
 // GET SINGLE CONTACT
 exports.getContactById = async (req, res) => {
   try {
-    const contact = await Contact.findById(req.params.id);
+    const contact = await Contact.findById(req.params.id).populate('companyId', 'name slug').lean();
     if (!contact) {
       return res.status(404).json({ success: false, message: "Contact not found" });
     }

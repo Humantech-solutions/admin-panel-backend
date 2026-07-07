@@ -39,6 +39,11 @@ const contactSchema = new mongoose.Schema({
     enum: ['New', 'Contacted', 'Closed'],
     default: 'New'
   },
+  companyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Company',
+    required: false
+  },
   project: {
     type: String,
     required: true
@@ -52,5 +57,10 @@ const contactSchema = new mongoose.Schema({
     default: Date.now
   }
 }, { timestamps: true });
+
+// Optimize lookups and filtering by company and status
+contactSchema.index({ companyId: 1 });
+contactSchema.index({ companyId: 1, createdAt: -1 });
+contactSchema.index({ companyId: 1, status: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Contact', contactSchema);
