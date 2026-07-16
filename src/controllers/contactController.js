@@ -12,8 +12,8 @@ exports.submitContact = async (req, res) => {
     // Dynamically lookup the company in the database
     const company = await Company.findOne({ slug: resolvedProject.toLowerCase() });
     
-    const resolvedCompanyName = company ? company.name : (companyName || 'Nabhira Technologies');
-    const adminNotificationEmail = company ? company.adminEmail : 'muthuprabha@hutechsolutions.com';
+    const resolvedCompanyName = company ? company.name : (companyName);
+    const adminNotificationEmail = company ? company.adminEmail : 'hutechsolutions@yopmail.com';
     const emailFromName = company ? (company.fromEmailName || company.name) : resolvedCompanyName;
 
     const newContact = new Contact({
