@@ -17,7 +17,36 @@ const chatRoutes = require('./routes/chatRoutes');
 const companyRoutes = require('./routes/companyRoutes');
 const documentRequestRoutes = require('./routes/documentRequestRoutes');
 
-app.use(cors());
+// Configure CORS options
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : [
+      'https://admin.hutechsolutions.in',
+      'https://apis.admin.hutechsolutions.in',
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:8000',
+      'http://localhost:8001'
+    ];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, Postman) or matching origins
+    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      callback(null, true);
+    } else {
+      // Pass true to prevent blocking requests from unknown origins in production
+      callback(null, true);
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform'],
+  credentials: true,
+  optionsSuccessStatus: 200 // For legacy browser support
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
