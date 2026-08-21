@@ -40,7 +40,20 @@ const eventRegistrationSchema = new mongoose.Schema({
   submittedAt: {
     type: Date,
     default: Date.now
-  }
+  },
+  companyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Company',
+    required: false,
+  },
+  websiteId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Website',
+    required: false,
+    index: true,
+  },
 }, { timestamps: true });
+
+eventRegistrationSchema.index({ websiteId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('EventRegistration', eventRegistrationSchema);

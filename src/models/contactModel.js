@@ -44,13 +44,11 @@ const contactSchema = new mongoose.Schema({
     ref: 'Company',
     required: false
   },
-  project: {
-    type: String,
-    required: true
-  },
-  companyName: {
-    type: String,
-    required: true
+  websiteId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Website',
+    required: false,
+    index: true
   },
   submittedAt: {
     type: Date,
@@ -58,9 +56,9 @@ const contactSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-// Optimize lookups and filtering by company and status
+// Optimize lookups and filtering
 contactSchema.index({ companyId: 1 });
-contactSchema.index({ companyId: 1, createdAt: -1 });
-contactSchema.index({ companyId: 1, status: 1, createdAt: -1 });
+contactSchema.index({ websiteId: 1, createdAt: -1 });
+contactSchema.index({ websiteId: 1, status: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Contact', contactSchema);

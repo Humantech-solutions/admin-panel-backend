@@ -35,13 +35,11 @@ const careerSchema = new mongoose.Schema({
     ref: 'Company',
     required: false
   },
-  project: {
-    type: String,
-    required: true
-  },
-  companyName: {
-    type: String,
-    required: true
+  websiteId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Website',
+    required: false,
+    index: true
   },
   appliedAt: {
     type: Date,
@@ -51,6 +49,6 @@ const careerSchema = new mongoose.Schema({
 
 // Optimize indexing for dynamic filters
 careerSchema.index({ companyId: 1 });
-careerSchema.index({ companyId: 1, createdAt: -1 });
+careerSchema.index({ websiteId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Career', careerSchema);

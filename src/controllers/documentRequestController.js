@@ -1,11 +1,14 @@
+const path = require('path');
 const DocumentRequest = require('../models/documentRequestModel');
 const Company = require('../models/companyModel');
 const { sendEmail } = require('../utils/emailUtil');
+const { resolveCompanyAndWebsite } = require('../utils/resolverUtil');
+const { getOrUploadS3File } = require('../utils/s3Util');
 
 // SUBMIT DOCUMENT DOWNLOAD REQUEST
 exports.submitDocumentRequest = async (req, res) => {
   try {
-    const { name, email, phone, documentName, document, project, companyName } = req.body;
+    const { name, email, phone, documentName, document } = req.body;
 
     if (!name || !email || !documentName || !document) {
       return res.status(400).json({ 
@@ -14,31 +17,50 @@ exports.submitDocumentRequest = async (req, res) => {
       });
     }
 
-    const resolvedProject = project || 'nabhira';
-    
-    // Lookup target company dynamically
-    const company = await Company.findOne({ slug: resolvedProject.toLowerCase() });
-    
-    const resolvedCompanyName = company ? company.name : (companyName || 'Nabhira Technologies');
-    const adminNotificationEmail = company ? company.adminEmail : 'muthuprabha@hutechsolutions.com';
-    const emailFromName = company ? (company.fromEmailName || company.name) : resolvedCompanyName;
+    const resolved = await resolveCompanyAndWebsite(req.body, req);
+    const resolvedProject = resolved.projectSlug;
+    const resolvedCompanyName = resolved.companyName;
+    const adminNotificationEmail = resolved.adminNotificationEmail;
+    const emailFromName = resolved.fromEmailName;
+
+    // Check AWS S3 bucket: if file exists in S3, reuse existing S3 URL; if not, upload it to S3
+    let downloadUrl;
+    if (document && document.startsWith('http')) {
+      downloadUrl = document; // Already an absolute S3 or HTTPS URL
+    } else {
+      let s3Url = null;
+      try {
+        const localFilePath = req.file 
+          ? req.file.path 
+          : path.join(__dirname, '../../', document.replace(/^\//, ''));
+
+        const fileName = req.file ? req.file.filename : path.basename(document);
+
+        s3Url = await getOrUploadS3File({
+          fileSource: localFilePath,
+          fileName,
+          mimeType: req.file?.mimetype || 'application/pdf'
+        });
+      } catch (s3Err) {
+        console.warn('⚠️ S3 check/upload warning:', s3Err.message);
+      }
+
+      downloadUrl = s3Url || `${process.env.BACKEND_URL || 'http://localhost:8001'}${document}`;
+    }
 
     const newRequest = new DocumentRequest({
       name,
       email,
       phone,
       documentName,
-      document,
-      project: resolvedProject,
-      companyName: resolvedCompanyName,
-      companyId: company ? company._id : undefined
+      document: downloadUrl, // Save S3 URL or fallback URL in MongoDB
+      companyId: resolved.companyId,
+      websiteId: resolved.websiteId
     });
 
     await newRequest.save();
 
     // 1. Dispatch stylized email to the User with the download option
-    const downloadUrl = document.startsWith('http') ? document : `${process.env.BACKEND_URL || 'http://localhost:8001'}${document}`;
-    
     await sendEmail({
       to: email,
       fromName: emailFromName,
@@ -123,6 +145,10 @@ exports.submitDocumentRequest = async (req, res) => {
               <tr style="border-bottom: 1px solid #f1f5f9;">
                 <td style="padding: 12px 0; color: #64748b; font-size: 12px; font-weight: 700; text-transform: uppercase;">Document</td>
                 <td style="padding: 12px 0; color: #11253e; font-weight: 700;">${documentName}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 12px 0; color: #64748b; font-size: 12px; font-weight: 700; text-transform: uppercase;">Target Portal</td>
+                <td style="padding: 12px 0; color: #11253e;">${resolved.websiteName ? `${resolved.websiteName} (${resolvedCompanyName})` : resolvedCompanyName}</td>
               </tr>
             </table>
 

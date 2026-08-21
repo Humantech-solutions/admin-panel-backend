@@ -1,33 +1,34 @@
 const Contact = require('../models/contactModel');
 const Company = require('../models/companyModel');
 const { sendEmail } = require('../utils/emailUtil');
+const { resolveCompanyAndWebsite } = require('../utils/resolverUtil');
 
 // SUBMIT CONTACT FORM
 exports.submitContact = async (req, res) => {
   try {
-    const { name, email, phone, subject, message, pageTitle, pageUrl, category, project, companyName } = req.body;
+    const { name, email, phone, subject, message, pageTitle, pageUrl, category } = req.body;
     
-    const resolvedProject = project || 'nabhira';
-    
-    // Dynamically lookup the company in the database
-    const company = await Company.findOne({ slug: resolvedProject.toLowerCase() });
-    
-    const resolvedCompanyName = company ? company.name : (companyName);
-    const adminNotificationEmail = company ? company.adminEmail : 'hutechsolutions@yopmail.com';
-    const emailFromName = company ? (company.fromEmailName || company.name) : resolvedCompanyName;
+    if (!name || !email) {
+      return res.status(400).json({ success: false, message: 'Name and email are required.' });
+    }
+
+    const resolved = await resolveCompanyAndWebsite(req.body, req);
+    const resolvedProject = resolved.projectSlug;
+    const resolvedCompanyName = resolved.companyName;
+    const adminNotificationEmail = resolved.adminNotificationEmail;
+    const emailFromName = resolved.fromEmailName;
 
     const newContact = new Contact({
       name,
       email,
       phone,
-      subject,
-      message,
+      subject: subject || 'General Contact Inquiry',
+      message: message || 'Inquiry submitted from website contact form.',
       pageTitle,
       pageUrl,
-      category: category,
-      project: resolvedProject,
-      companyName: resolvedCompanyName,
-      companyId: company ? company._id : undefined
+      category: category || 'Contact',
+      companyId: resolved.companyId,
+      websiteId: resolved.websiteId
     });
 
     await newContact.save();
