@@ -1,11 +1,14 @@
+const path = require('path');
 const Career = require('../models/careerModel');
 const Company = require('../models/companyModel');
 const { sendEmail } = require('../utils/emailUtil');
+const { resolveCompanyAndWebsite } = require('../utils/resolverUtil');
+const { getOrUploadS3File } = require('../utils/s3Util');
 
 // SUBMIT APPLICATION
 exports.submitApplication = async (req, res) => {
   try {
-    const { name, email, linkedin, pageTitle, pageUrl, project, companyName } = req.body;
+    const { name, email, linkedin, pageTitle, pageUrl } = req.body;
     
     // Server-side validation
     if (!name || !name.trim()) {
@@ -28,14 +31,11 @@ exports.submitApplication = async (req, res) => {
       return res.status(400).json({ success: false, message: "Resume / CV file is required" });
     }
 
-    const resolvedProject = project || 'nabhira';
-    
-    // Dynamically lookup company in database
-    const company = await Company.findOne({ slug: resolvedProject.toLowerCase() });
-    
-    const resolvedCompanyName = company ? company.name : (companyName || 'Nabhira Technologies');
-    const adminNotificationEmail = company ? company.adminEmail : 'muthuprabha@hutechsolutions.com';
-    const emailFromName = company ? (company.fromEmailName || company.name) : resolvedCompanyName;
+    const resolved = await resolveCompanyAndWebsite(req.body, req);
+    const resolvedProject = resolved.projectSlug;
+    const resolvedCompanyName = resolved.companyName;
+    const adminNotificationEmail = resolved.adminNotificationEmail;
+    const emailFromName = resolved.fromEmailName;
     
     const resumePath = `/uploads/resumes/${req.file.filename}`;
     
@@ -45,10 +45,9 @@ exports.submitApplication = async (req, res) => {
       linkedin: linkedin ? linkedin.trim() : undefined,
       pageTitle: pageTitle.trim(),
       pageUrl: pageUrl.trim(),
-      project: resolvedProject,
-      companyName: resolvedCompanyName,
       resume: resumePath,
-      companyId: company ? company._id : undefined
+      companyId: resolved.companyId,
+      websiteId: resolved.websiteId
     });
 
     await newApplication.save();
@@ -153,15 +152,12 @@ exports.submitApplication = async (req, res) => {
 // SUBMIT BROCHURE REQUEST
 exports.submitBrochureRequest = async (req, res) => {
   try {
-    const { name, email, pageTitle, pageUrl, project, companyName } = req.body;
+    const { name, email, pageTitle, pageUrl } = req.body;
     
-    const resolvedProject = project || 'nabhira';
-    
-    // Dynamically lookup company in database
-    const company = await Company.findOne({ slug: resolvedProject.toLowerCase() });
-    
-    const resolvedCompanyName = company ? company.name : (companyName || 'Nabhira Technologies');
-    const emailFromName = company ? (company.fromEmailName || company.name) : resolvedCompanyName;
+    const resolved = await resolveCompanyAndWebsite(req.body, req);
+    const resolvedProject = resolved.projectSlug;
+    const resolvedCompanyName = resolved.companyName;
+    const emailFromName = resolved.fromEmailName;
     
     const newMail = new Career({
       name,
@@ -169,20 +165,21 @@ exports.submitBrochureRequest = async (req, res) => {
       pageTitle,
       pageUrl,
       type: 'brochure',
-      project: resolvedProject,
-      companyName: resolvedCompanyName,
-      companyId: company ? company._id : undefined
+      companyId: resolved.companyId,
+      websiteId: resolved.websiteId
     });
 
     await newMail.save();
 
-    // Trigger automated email
-    const brochureUrl = process.env.BROCHURE_URL || 'http://localhost:3002';
-    const brochureLink = resolvedProject === 'hutech' 
-      ? `${brochureUrl}/Hutech_Careers_Brochure.pdf` 
+    // Trigger automated email (uses direct full URL from .env if provided)
+    const envBrochure = (resolvedProject === 'hutech' ? process.env.HUTECH_BROCHURE_URL : process.env.NABHIRA_BROCHURE_URL) || process.env.BROCHURE_URL;
+    const brochureLink = (envBrochure && (envBrochure.startsWith('http') && (envBrochure.includes('.pdf') || envBrochure.includes('.doc'))))
+      ? envBrochure
+      : resolvedProject === 'hutech' 
+      ? `${envBrochure || 'http://localhost:3002'}/Hutech_Careers_Brochure.pdf` 
       : resolvedProject === 'hulabs'
-      ? `${brochureUrl}/Hulabs_Careers_Brochure.pdf`
-      : `${brochureUrl}/Nabhira_Careers_Brochure.pdf`; 
+      ? `${envBrochure || 'http://localhost:3002'}/Hulabs_Careers_Brochure.pdf`
+      : `${envBrochure || 'http://localhost:3002'}/Nabhira_Careers_Brochure.pdf`; 
 
     await sendEmail({
       to: email,

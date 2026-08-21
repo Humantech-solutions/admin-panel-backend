@@ -26,13 +26,11 @@ const documentRequestSchema = new mongoose.Schema({
     ref: 'Company',
     required: false
   },
-  project: {
-    type: String,
-    required: true
-  },
-  companyName: {
-    type: String,
-    required: true
+  websiteId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Website',
+    required: false,
+    index: true
   },
   submittedAt: {
     type: Date,
@@ -42,7 +40,7 @@ const documentRequestSchema = new mongoose.Schema({
 
 // Optimize indexing for fast dashboard lookups and filtering queries
 documentRequestSchema.index({ companyId: 1 });
-documentRequestSchema.index({ companyId: 1, createdAt: -1 });
+documentRequestSchema.index({ websiteId: 1, createdAt: -1 });
 documentRequestSchema.index({ email: 1 });
 
 module.exports = mongoose.model('DocumentRequest', documentRequestSchema);

@@ -1,5 +1,6 @@
 const ChatQuery = require('../models/chatQueryModel');
 const { sendEmail } = require('../utils/emailUtil');
+const { resolveCompanyAndWebsite } = require('../utils/resolverUtil');
 
 // SUBMIT CHAT QUERY
 exports.submitChatQuery = async (req, res) => {
@@ -10,13 +11,23 @@ exports.submitChatQuery = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email and query are required.' });
     }
 
-    const newQuery = new ChatQuery({ email, phone, query, pageUrl });
+    const resolved = await resolveCompanyAndWebsite(req.body, req);
+
+    const newQuery = new ChatQuery({
+      email,
+      phone,
+      query,
+      pageUrl,
+      companyId: resolved.companyId,
+      websiteId: resolved.websiteId
+    });
     await newQuery.save();
 
     // Send notification to admin
     await sendEmail({
-      to: 'deepsikha@hutechsolutions.com',
-      subject: `New Chat Query from ${email}`,
+      to: resolved.adminNotificationEmail,
+      fromName: `${resolved.companyName} Admin Portal`,
+      subject: `[${resolved.companyName}] New Chat Query from ${email}`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
           <h2 style="color: #11253e;">New Chat Query Received</h2>

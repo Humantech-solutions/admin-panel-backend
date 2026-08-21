@@ -15,7 +15,9 @@ const eventRegistrationRoutes = require('./routes/eventRegistrationRoutes');
 const salesRoutes = require('./routes/salesRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const companyRoutes = require('./routes/companyRoutes');
+const websiteRoutes = require('./routes/websiteRoutes');
 const documentRequestRoutes = require('./routes/documentRequestRoutes');
+const seedDefaults = require('./utils/seeder');
 
 // Configure CORS options
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -46,7 +48,8 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 app.use('/api/auth', authRoutes);
@@ -57,6 +60,7 @@ app.use('/api/event-registration', eventRegistrationRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/companies', companyRoutes);
+app.use('/api/websites', websiteRoutes);
 app.use('/api/documents', documentRequestRoutes);
 
 app.get('/', (req, res) => {
@@ -66,7 +70,10 @@ app.get('/', (req, res) => {
 // Database connection
 const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/nabhira_db';
 mongoose.connect(mongoURI)
-  .then(() => console.log('✅ MongoDB connected successfully'))
+  .then(async () => {
+    console.log('✅ MongoDB connected successfully');
+    await seedDefaults();
+  })
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
 

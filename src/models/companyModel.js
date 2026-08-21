@@ -18,10 +18,6 @@ const companySchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
-  siteUrl: {
-    type: String,
-    trim: true,
-  },
   adminEmail: {
     type: String,
     required: [true, 'Notification recipient email is required'],
