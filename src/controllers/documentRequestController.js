@@ -20,7 +20,7 @@ exports.submitDocumentRequest = async (req, res) => {
     const resolved = await resolveCompanyAndWebsite(req.body, req);
     const resolvedProject = resolved.projectSlug;
     const resolvedCompanyName = resolved.companyName;
-    const adminNotificationEmail = resolved.adminNotificationEmail;
+    const salesNotificationEmail = resolved.salesNotificationEmail;
     const emailFromName = resolved.fromEmailName;
 
     // Check AWS S3 bucket: if file exists in S3, reuse existing S3 URL; if not, upload it to S3
@@ -64,6 +64,7 @@ exports.submitDocumentRequest = async (req, res) => {
     await sendEmail({
       to: email,
       fromName: emailFromName,
+      smtpConfig: resolved.salesSmtp,
       subject: `Your download is ready: ${documentName}`,
       html: `
         <div style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 0; border: 1px solid #e2e8f0; border-radius: 24px; background-color: #ffffff; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.02);">
@@ -118,8 +119,9 @@ exports.submitDocumentRequest = async (req, res) => {
     const adminLink = `${adminUrl}/admin/dashboard/document-requests?project=${resolvedProject}`;
 
     await sendEmail({
-      to: adminNotificationEmail,
+      to: salesNotificationEmail,
       fromName: `${resolvedCompanyName} Admin Portal`,
+      smtpConfig: resolved.salesSmtp,
       subject: `[${resolvedCompanyName}] Document Request: ${documentName} by ${name}`,
       html: `
         <div style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 0; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; overflow: hidden;">
