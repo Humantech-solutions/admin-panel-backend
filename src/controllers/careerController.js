@@ -34,8 +34,9 @@ exports.submitApplication = async (req, res) => {
     const resolved = await resolveCompanyAndWebsite(req.body, req);
     const resolvedProject = resolved.projectSlug;
     const resolvedCompanyName = resolved.companyName;
-    const adminNotificationEmail = resolved.adminNotificationEmail;
+    const careersNotificationEmail = resolved.careersNotificationEmail;
     const emailFromName = resolved.fromEmailName;
+    const careersSmtp = resolved.careersSmtp;
     
     const resumePath = `/uploads/resumes/${req.file.filename}`;
     
@@ -56,6 +57,7 @@ exports.submitApplication = async (req, res) => {
     await sendEmail({
       to: email.trim(),
       fromName: `${emailFromName} Careers`,
+      smtpConfig: careersSmtp,
       subject: `Application Received: Thank you for applying to ${resolvedCompanyName}`,
       html: `
         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff;">
@@ -95,8 +97,9 @@ exports.submitApplication = async (req, res) => {
     const resumeDownloadLink = `${backendUrl}${resumePath}`;
     
     await sendEmail({
-      to: adminNotificationEmail,
+      to: careersNotificationEmail,
       fromName: `${resolvedCompanyName} Careers`,
+      smtpConfig: careersSmtp,
       subject: `New Job Application Received: ${name} (${resolvedCompanyName})`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
@@ -184,6 +187,7 @@ exports.submitBrochureRequest = async (req, res) => {
     await sendEmail({
       to: email,
       fromName: `${emailFromName} Talent Team`,
+      smtpConfig: resolved.careersSmtp,
       subject: `Your ${resolvedCompanyName} Careers Brochure`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">

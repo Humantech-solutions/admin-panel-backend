@@ -41,6 +41,7 @@ exports.submitRegistration = async (req, res) => {
     await sendEmail({
       to: email,
       fromName: `${resolved.fromEmailName} Events`,
+      smtpConfig: resolved.salesSmtp,
       subject: `Registration Confirmed: ${eventTitle || 'Event'}`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
@@ -56,8 +57,9 @@ exports.submitRegistration = async (req, res) => {
 
     // 2. Send Alert Email to Company Admin
     await sendEmail({
-      to: resolved.adminNotificationEmail,
+      to: resolved.salesNotificationEmail,
       fromName: `${resolved.companyName} Admin Portal`,
+      smtpConfig: resolved.salesSmtp,
       subject: `[${resolved.companyName}] New Event Registration: ${eventTitle} by ${fullName}`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
