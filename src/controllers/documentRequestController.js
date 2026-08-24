@@ -189,28 +189,23 @@ exports.submitDocumentRequest = async (req, res) => {
 // GET ALL DOCUMENT REQUESTS (Admin only, filterable by project)
 exports.getAllRequests = async (req, res) => {
   try {
-    const { project } = req.query;
-
-    if (!project) {
-      return res.status(400).json({ success: false, message: "Project filter is required." });
+    // Block Superadmin from accessing organization lead data
+    if (req.user && req.user.role === 'superadmin') {
+      return res.status(403).json({ success: false, message: 'Superadmin accounts manage platform onboarding and settings only and cannot access company lead data.' });
     }
 
-    // Lookup company
-    const company = await Company.findOne({ slug: project.toLowerCase() });
-    
-    let query = { project: project.toLowerCase() };
-    
-    // If company exists, include companyId filter to capture both legacy and current models
-    if (company) {
-      query = {
-        $or: [
-          { project: project.toLowerCase() },
-          { companyId: company._id }
-        ]
-      };
+    const filter = {};
+    if (req.user && req.user.companyId) {
+      filter.companyId = req.user.companyId;
+    } else {
+      return res.status(400).json({ success: false, message: 'Company account setup required.' });
     }
 
-    const requests = await DocumentRequest.find(query).sort({ createdAt: -1 }).lean();
+    const requests = await DocumentRequest.find(filter)
+      .populate('companyId', 'name slug')
+      .populate('websiteId', 'name slug url')
+      .sort({ createdAt: -1 })
+      .lean();
     res.json({ success: true, count: requests.length, requests });
 
   } catch (error) {

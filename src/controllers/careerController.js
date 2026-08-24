@@ -210,27 +210,41 @@ exports.submitBrochureRequest = async (req, res) => {
   }
 };
 
-// GET ALL APPLICATIONS
+// GET ALL APPLICATIONS (with tenant & website isolation)
 exports.getAllApplications = async (req, res) => {
   try {
-    const { project } = req.query;
+    const { company, project, website } = req.query;
     const filter = {};
-    
-    if (project) {
-      // Resolve company slug to companyId for indexed search
-      const company = await Company.findOne({ slug: project.toLowerCase() }).lean();
-      if (company) {
-        filter.companyId = company._id;
-      } else {
-        // Fallback for non-migrated/legacy data or missing company slugs
-        filter.project = project;
+
+    // Block Superadmin from accessing organization lead data
+    if (req.user && req.user.role === 'superadmin') {
+      return res.status(403).json({ success: false, message: 'Superadmin accounts manage platform onboarding and settings only and cannot access company lead data.' });
+    }
+
+    if (req.user && req.user.companyId) {
+      filter.companyId = req.user.companyId;
+    } else {
+      return res.status(400).json({ success: false, message: 'Company account setup required.' });
+    }
+
+    if (website && website !== 'all') {
+      const Website = require('../models/websiteModel');
+      const foundWeb = await Website.findOne({
+        $or: [
+          { slug: website.toLowerCase() },
+          ...(website.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: website }] : [])
+        ]
+      }).lean();
+      if (foundWeb) {
+        filter.websiteId = foundWeb._id;
       }
     }
     
     const applications = await Career.find(filter)
       .populate('companyId', 'name slug')
+      .populate('websiteId', 'name slug url')
       .sort({ appliedAt: -1 })
-      .lean(); // Optimization: plain JS objects
+      .lean();
 
     res.json({ success: true, applications });
   } catch (error) {

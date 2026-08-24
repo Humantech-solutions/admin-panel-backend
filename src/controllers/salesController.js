@@ -93,10 +93,42 @@ exports.submitSalesBrochure = async (req, res) => {
   }
 };
 
-// GET ALL SALES MAILS (Admin only)
+// GET ALL SALES MAILS (with tenant & website isolation)
 exports.getAllSalesMails = async (req, res) => {
   try {
-    const mails = await SalesMail.find().sort({ requestedAt: -1 });
+    const { company, project, website } = req.query;
+    const filter = {};
+
+    // Block Superadmin from accessing organization lead data
+    if (req.user && req.user.role === 'superadmin') {
+      return res.status(403).json({ success: false, message: 'Superadmin accounts manage platform onboarding and settings only and cannot access company lead data.' });
+    }
+
+    if (req.user && req.user.companyId) {
+      filter.companyId = req.user.companyId;
+    } else {
+      return res.status(400).json({ success: false, message: 'Company account setup required.' });
+    }
+
+    if (website && website !== 'all') {
+      const Website = require('../models/websiteModel');
+      const foundWeb = await Website.findOne({
+        $or: [
+          { slug: website.toLowerCase() },
+          ...(website.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: website }] : [])
+        ]
+      }).lean();
+      if (foundWeb) {
+        filter.websiteId = foundWeb._id;
+      }
+    }
+
+    const mails = await SalesMail.find(filter)
+      .populate('companyId', 'name slug')
+      .populate('websiteId', 'name slug url')
+      .sort({ requestedAt: -1 })
+      .lean();
+
     res.json({ success: true, mails });
   } catch (error) {
     console.error("Fetch error:", error);

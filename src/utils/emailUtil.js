@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { decrypt } = require('./cryptoUtil');
 
 const sendEmail = async ({ to, subject, html, attachments = [], fromName, smtpConfig = null, replyTo = null }) => {
   try {
@@ -9,7 +10,8 @@ const sendEmail = async ({ to, subject, html, attachments = [], fromName, smtpCo
     const port = hasCustomSmtp && smtpConfig.port ? parseInt(smtpConfig.port) : parseInt(process.env.SMTP_PORT || '587');
     const secure = hasCustomSmtp && (smtpConfig.secure !== undefined) ? Boolean(smtpConfig.secure) : (process.env.SMTP_SECURE === 'true');
     const user = hasCustomSmtp ? smtpConfig.user : process.env.SMTP_USER;
-    const pass = hasCustomSmtp ? smtpConfig.pass : process.env.SMTP_PASS;
+    const rawPass = hasCustomSmtp ? smtpConfig.pass : process.env.SMTP_PASS;
+    const pass = decrypt(rawPass);
 
     const transporter = nodemailer.createTransport({
       host,
