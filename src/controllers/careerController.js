@@ -34,8 +34,9 @@ exports.submitApplication = async (req, res) => {
     const resolved = await resolveCompanyAndWebsite(req.body, req);
     const resolvedProject = resolved.projectSlug;
     const resolvedCompanyName = resolved.companyName;
-    const adminNotificationEmail = resolved.adminNotificationEmail;
+    const careersNotificationEmail = resolved.careersNotificationEmail;
     const emailFromName = resolved.fromEmailName;
+    const careersSmtp = resolved.careersSmtp;
     
     const resumePath = `/uploads/resumes/${req.file.filename}`;
     
@@ -56,6 +57,7 @@ exports.submitApplication = async (req, res) => {
     await sendEmail({
       to: email.trim(),
       fromName: `${emailFromName} Careers`,
+      smtpConfig: careersSmtp,
       subject: `Application Received: Thank you for applying to ${resolvedCompanyName}`,
       html: `
         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff;">
@@ -95,8 +97,9 @@ exports.submitApplication = async (req, res) => {
     const resumeDownloadLink = `${backendUrl}${resumePath}`;
     
     await sendEmail({
-      to: adminNotificationEmail,
+      to: careersNotificationEmail,
       fromName: `${resolvedCompanyName} Careers`,
+      smtpConfig: careersSmtp,
       subject: `New Job Application Received: ${name} (${resolvedCompanyName})`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
@@ -184,6 +187,7 @@ exports.submitBrochureRequest = async (req, res) => {
     await sendEmail({
       to: email,
       fromName: `${emailFromName} Talent Team`,
+      smtpConfig: resolved.careersSmtp,
       subject: `Your ${resolvedCompanyName} Careers Brochure`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
@@ -206,27 +210,41 @@ exports.submitBrochureRequest = async (req, res) => {
   }
 };
 
-// GET ALL APPLICATIONS
+// GET ALL APPLICATIONS (with tenant & website isolation)
 exports.getAllApplications = async (req, res) => {
   try {
-    const { project } = req.query;
+    const { company, project, website } = req.query;
     const filter = {};
-    
-    if (project) {
-      // Resolve company slug to companyId for indexed search
-      const company = await Company.findOne({ slug: project.toLowerCase() }).lean();
-      if (company) {
-        filter.companyId = company._id;
-      } else {
-        // Fallback for non-migrated/legacy data or missing company slugs
-        filter.project = project;
+
+    // Block Superadmin from accessing organization lead data
+    if (req.user && req.user.role === 'superadmin') {
+      return res.status(403).json({ success: false, message: 'Superadmin accounts manage platform onboarding and settings only and cannot access company lead data.' });
+    }
+
+    if (req.user && req.user.companyId) {
+      filter.companyId = req.user.companyId;
+    } else {
+      return res.status(400).json({ success: false, message: 'Company account setup required.' });
+    }
+
+    if (website && website !== 'all') {
+      const Website = require('../models/websiteModel');
+      const foundWeb = await Website.findOne({
+        $or: [
+          { slug: website.toLowerCase() },
+          ...(website.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: website }] : [])
+        ]
+      }).lean();
+      if (foundWeb) {
+        filter.websiteId = foundWeb._id;
       }
     }
     
     const applications = await Career.find(filter)
       .populate('companyId', 'name slug')
+      .populate('websiteId', 'name slug url')
       .sort({ appliedAt: -1 })
-      .lean(); // Optimization: plain JS objects
+      .lean();
 
     res.json({ success: true, applications });
   } catch (error) {

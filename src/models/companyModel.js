@@ -23,9 +23,50 @@ const companySchema = new mongoose.Schema({
     required: [true, 'Notification recipient email is required'],
     trim: true,
   },
+  careersNotificationEmail: {
+    type: String,
+    trim: true,
+  },
+  salesNotificationEmail: {
+    type: String,
+    trim: true,
+  },
+  contactNotificationEmail: {
+    type: String,
+    trim: true,
+  },
   fromEmailName: {
     type: String,
     trim: true
+  },
+  // Department-specific SMTP credentials
+  adminSmtp: {
+    host: { type: String, trim: true },
+    port: { type: Number },
+    user: { type: String, trim: true },
+    pass: { type: String, trim: true },
+    secure: { type: Boolean, default: false }
+  },
+  careersSmtp: {
+    host: { type: String, trim: true },
+    port: { type: Number },
+    user: { type: String, trim: true },
+    pass: { type: String, trim: true },
+    secure: { type: Boolean, default: false }
+  },
+  salesSmtp: {
+    host: { type: String, trim: true },
+    port: { type: Number },
+    user: { type: String, trim: true },
+    pass: { type: String, trim: true },
+    secure: { type: Boolean, default: false }
+  },
+  contactSmtp: {
+    host: { type: String, trim: true },
+    port: { type: Number },
+    user: { type: String, trim: true },
+    pass: { type: String, trim: true },
+    secure: { type: Boolean, default: false }
   },
   isActive: {
     type: Boolean,

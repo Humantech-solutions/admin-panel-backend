@@ -25,7 +25,7 @@ exports.submitChatQuery = async (req, res) => {
 
     // Send notification to admin
     await sendEmail({
-      to: resolved.adminNotificationEmail,
+      to: resolved.contactNotificationEmail,
       fromName: `${resolved.companyName} Admin Portal`,
       subject: `[${resolved.companyName}] New Chat Query from ${email}`,
       html: `
@@ -81,10 +81,42 @@ exports.submitChatQuery = async (req, res) => {
   }
 };
 
-// GET ALL CHAT QUERIES (Admin)
+// GET ALL CHAT QUERIES (with tenant & website isolation)
 exports.getAllChatQueries = async (req, res) => {
   try {
-    const queries = await ChatQuery.find().sort({ submittedAt: -1 });
+    const { company, project, website } = req.query;
+    const filter = {};
+
+    // Block Superadmin from accessing organization lead data
+    if (req.user && req.user.role === 'superadmin') {
+      return res.status(403).json({ success: false, message: 'Superadmin accounts manage platform onboarding and settings only and cannot access company lead data.' });
+    }
+
+    if (req.user && req.user.companyId) {
+      filter.companyId = req.user.companyId;
+    } else {
+      return res.status(400).json({ success: false, message: 'Company account setup required.' });
+    }
+
+    if (website && website !== 'all') {
+      const Website = require('../models/websiteModel');
+      const foundWeb = await Website.findOne({
+        $or: [
+          { slug: website.toLowerCase() },
+          ...(website.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: website }] : [])
+        ]
+      }).lean();
+      if (foundWeb) {
+        filter.websiteId = foundWeb._id;
+      }
+    }
+
+    const queries = await ChatQuery.find(filter)
+      .populate('companyId', 'name slug')
+      .populate('websiteId', 'name slug url')
+      .sort({ submittedAt: -1 })
+      .lean();
+
     res.json({ success: true, queries });
   } catch (error) {
     console.error('Fetch error:', error);

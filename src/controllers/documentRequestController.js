@@ -20,7 +20,7 @@ exports.submitDocumentRequest = async (req, res) => {
     const resolved = await resolveCompanyAndWebsite(req.body, req);
     const resolvedProject = resolved.projectSlug;
     const resolvedCompanyName = resolved.companyName;
-    const adminNotificationEmail = resolved.adminNotificationEmail;
+    const salesNotificationEmail = resolved.salesNotificationEmail;
     const emailFromName = resolved.fromEmailName;
 
     // Check AWS S3 bucket: if file exists in S3, reuse existing S3 URL; if not, upload it to S3
@@ -64,6 +64,7 @@ exports.submitDocumentRequest = async (req, res) => {
     await sendEmail({
       to: email,
       fromName: emailFromName,
+      smtpConfig: resolved.salesSmtp,
       subject: `Your download is ready: ${documentName}`,
       html: `
         <div style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 0; border: 1px solid #e2e8f0; border-radius: 24px; background-color: #ffffff; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.02);">
@@ -118,8 +119,9 @@ exports.submitDocumentRequest = async (req, res) => {
     const adminLink = `${adminUrl}/admin/dashboard/document-requests?project=${resolvedProject}`;
 
     await sendEmail({
-      to: adminNotificationEmail,
+      to: salesNotificationEmail,
       fromName: `${resolvedCompanyName} Admin Portal`,
+      smtpConfig: resolved.salesSmtp,
       subject: `[${resolvedCompanyName}] Document Request: ${documentName} by ${name}`,
       html: `
         <div style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 0; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; overflow: hidden;">
@@ -187,28 +189,23 @@ exports.submitDocumentRequest = async (req, res) => {
 // GET ALL DOCUMENT REQUESTS (Admin only, filterable by project)
 exports.getAllRequests = async (req, res) => {
   try {
-    const { project } = req.query;
-
-    if (!project) {
-      return res.status(400).json({ success: false, message: "Project filter is required." });
+    // Block Superadmin from accessing organization lead data
+    if (req.user && req.user.role === 'superadmin') {
+      return res.status(403).json({ success: false, message: 'Superadmin accounts manage platform onboarding and settings only and cannot access company lead data.' });
     }
 
-    // Lookup company
-    const company = await Company.findOne({ slug: project.toLowerCase() });
-    
-    let query = { project: project.toLowerCase() };
-    
-    // If company exists, include companyId filter to capture both legacy and current models
-    if (company) {
-      query = {
-        $or: [
-          { project: project.toLowerCase() },
-          { companyId: company._id }
-        ]
-      };
+    const filter = {};
+    if (req.user && req.user.companyId) {
+      filter.companyId = req.user.companyId;
+    } else {
+      return res.status(400).json({ success: false, message: 'Company account setup required.' });
     }
 
-    const requests = await DocumentRequest.find(query).sort({ createdAt: -1 }).lean();
+    const requests = await DocumentRequest.find(filter)
+      .populate('companyId', 'name slug')
+      .populate('websiteId', 'name slug url')
+      .sort({ createdAt: -1 })
+      .lean();
     res.json({ success: true, count: requests.length, requests });
 
   } catch (error) {
