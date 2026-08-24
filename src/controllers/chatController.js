@@ -25,7 +25,7 @@ exports.submitChatQuery = async (req, res) => {
 
     // Send notification to admin
     await sendEmail({
-      to: resolved.adminNotificationEmail,
+      to: resolved.contactNotificationEmail,
       fromName: `${resolved.companyName} Admin Portal`,
       subject: `[${resolved.companyName}] New Chat Query from ${email}`,
       html: `

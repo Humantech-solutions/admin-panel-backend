@@ -76,7 +76,22 @@ exports.getCompanyByIdOrSlug = async (req, res) => {
 // If siteUrl (+ optional siteName) are provided, automatically creates a linked Website.
 exports.createCompany = async (req, res) => {
   try {
-    const { name, slug, description, adminEmail, fromEmailName, siteUrl, siteName } = req.body;
+    const { 
+      name, 
+      slug, 
+      description, 
+      adminEmail, 
+      careersNotificationEmail,
+      salesNotificationEmail,
+      contactNotificationEmail,
+      fromEmailName, 
+      siteUrl, 
+      siteName,
+      adminSmtp,
+      careersSmtp,
+      salesSmtp,
+      contactSmtp
+    } = req.body;
 
     if (!name || !adminEmail) {
       return res.status(400).json({ success: false, message: 'Company name and notification email are required' });
@@ -94,7 +109,14 @@ exports.createCompany = async (req, res) => {
       slug: resolvedSlug,
       description,
       adminEmail,
+      careersNotificationEmail,
+      salesNotificationEmail,
+      contactNotificationEmail,
       fromEmailName,
+      ...(adminSmtp && { adminSmtp }),
+      ...(careersSmtp && { careersSmtp }),
+      ...(salesSmtp && { salesSmtp }),
+      ...(contactSmtp && { contactSmtp }),
     });
 
     await newCompany.save();
@@ -134,7 +156,9 @@ exports.createCompany = async (req, res) => {
       try {
         await sendEmail({
           to: adminEmail,
-          subject: `Welcome to ${name} Admin Portal — Credentials & Login Link`,
+          fromName: `Hutech CRM`,
+          smtpConfig: null, // Always sent via Platform/Superadmin SMTP engine
+          subject: `Welcome to Hutech CRM Admin Portal — Credentials & Login Link`,
           html: `
             <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 40px auto; padding: 40px; border: 1px solid #e0e0e0; border-radius: 16px; color: #11253e; box-shadow: 0 4px 24px rgba(0,0,0,0.05);">
               <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 12px;">Organization Onboarded Successfully</h2>
@@ -173,7 +197,21 @@ exports.createCompany = async (req, res) => {
 exports.updateCompany = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, slug, description, adminEmail, fromEmailName, isActive } = req.body;
+    const { 
+      name, 
+      slug, 
+      description, 
+      adminEmail, 
+      careersNotificationEmail,
+      salesNotificationEmail,
+      contactNotificationEmail,
+      fromEmailName, 
+      isActive,
+      adminSmtp,
+      careersSmtp,
+      salesSmtp,
+      contactSmtp
+    } = req.body;
 
     const company = await Company.findById(id);
     if (!company) {
@@ -183,8 +221,16 @@ exports.updateCompany = async (req, res) => {
     if (name) company.name = name;
     if (description !== undefined) company.description = description;
     if (adminEmail) company.adminEmail = adminEmail;
+    if (careersNotificationEmail !== undefined) company.careersNotificationEmail = careersNotificationEmail;
+    if (salesNotificationEmail !== undefined) company.salesNotificationEmail = salesNotificationEmail;
+    if (contactNotificationEmail !== undefined) company.contactNotificationEmail = contactNotificationEmail;
     if (fromEmailName !== undefined) company.fromEmailName = fromEmailName;
     if (isActive !== undefined) company.isActive = isActive;
+
+    if (adminSmtp !== undefined) company.adminSmtp = adminSmtp;
+    if (careersSmtp !== undefined) company.careersSmtp = careersSmtp;
+    if (salesSmtp !== undefined) company.salesSmtp = salesSmtp;
+    if (contactSmtp !== undefined) company.contactSmtp = contactSmtp;
 
     // Check if new slug conflicts with another company
     if (slug && slug.toLowerCase() !== company.slug) {

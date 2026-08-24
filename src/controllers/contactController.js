@@ -15,8 +15,9 @@ exports.submitContact = async (req, res) => {
     const resolved = await resolveCompanyAndWebsite(req.body, req);
     const resolvedProject = resolved.projectSlug;
     const resolvedCompanyName = resolved.companyName;
-    const adminNotificationEmail = resolved.adminNotificationEmail;
+    const contactNotificationEmail = resolved.contactNotificationEmail;
     const emailFromName = resolved.fromEmailName;
+    const contactSmtp = resolved.contactSmtp;
 
     const newContact = new Contact({
       name,
@@ -37,6 +38,7 @@ exports.submitContact = async (req, res) => {
     await sendEmail({
       to: email,
       fromName: emailFromName,
+      smtpConfig: contactSmtp,
       subject: `Thank you for contacting ${resolvedCompanyName}`,
       html: `
         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff;">
@@ -73,8 +75,9 @@ exports.submitContact = async (req, res) => {
     const adminLink = `${adminUrl}/admin/dashboard/contact-form?project=${resolvedProject}${category ? `&category=${encodeURIComponent(category)}` : ""}`;
     
     await sendEmail({
-      to: adminNotificationEmail,
+      to: contactNotificationEmail,
       fromName: `${resolvedCompanyName} Admin Portal`,
+      smtpConfig: contactSmtp,
       subject: `[${resolvedCompanyName}] New Lead: User inquiry from ${pageTitle || 'Website'}`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">

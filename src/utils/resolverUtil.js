@@ -97,14 +97,31 @@ async function resolveCompanyAndWebsite(body = {}, req = {}) {
     }
   }
 
+  // Define global fallback SMTP configuration from environment variables
+  const globalSmtp = process.env.SMTP_USER ? {
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  } : null;
+
   return {
     companyId: company ? company._id : undefined,
     websiteId: website ? website._id : undefined,
     companyName: company ? company.name : 'Default Company',
     websiteName: website ? website.name : undefined,
     adminNotificationEmail: company ? company.adminEmail : 'trupti@hutechsolutions.com',
+    careersNotificationEmail: company?.careersNotificationEmail || company?.careersSmtp?.user || company?.adminEmail || 'trupti@hutechsolutions.com',
+    salesNotificationEmail: company?.salesNotificationEmail || company?.salesSmtp?.user || company?.adminEmail || 'trupti@hutechsolutions.com',
+    contactNotificationEmail: company?.contactNotificationEmail || company?.contactSmtp?.user || company?.adminEmail || 'trupti@hutechsolutions.com',
     fromEmailName: company ? (company.fromEmailName || company.name) : 'Hutech Solutions',
-    projectSlug: candidateSlug || (company ? company.slug : 'hutech')
+    projectSlug: candidateSlug || (company ? company.slug : 'hutech'),
+    // Department SMTP configurations (defaulting to global email setup if not custom-configured)
+    adminSmtp: company?.adminSmtp?.user ? company.adminSmtp : globalSmtp,
+    careersSmtp: company?.careersSmtp?.user ? company.careersSmtp : globalSmtp,
+    salesSmtp: company?.salesSmtp?.user ? company.salesSmtp : globalSmtp,
+    contactSmtp: company?.contactSmtp?.user ? company.contactSmtp : globalSmtp,
   };
 }
 

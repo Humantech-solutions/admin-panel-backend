@@ -30,6 +30,7 @@ exports.submitSalesBrochure = async (req, res) => {
     await sendEmail({
       to: email,
       fromName: `${resolved.fromEmailName} Sales`,
+      smtpConfig: resolved.salesSmtp,
       subject: `Brochure: ${pageTitle} | ${resolved.companyName}`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
@@ -49,8 +50,9 @@ exports.submitSalesBrochure = async (req, res) => {
     const adminUrl = process.env.ADMIN_URL || 'http://localhost:3000';
     const adminLink = `${adminUrl}/admin/dashboard/sales`;
     await sendEmail({
-      to: resolved.adminNotificationEmail,
+      to: resolved.salesNotificationEmail,
       fromName: `${resolved.companyName} Admin Portal`,
+      smtpConfig: resolved.salesSmtp,
       subject: `[${resolved.companyName}] New Sales Brochure Lead: ${email}`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">

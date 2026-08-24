@@ -192,9 +192,14 @@ exports.verifyMfa = async (req, res) => {
       return res.status(400).json({ success: false, message: "User not found" });
     }
 
-    // Verify OTP (allow '123456' as dev master bypass code in non-production)
+    // Verify OTP (allow '123456' or '000000' as dev master bypass code in non-production)
     const isDevMasterCode = (process.env.NODE_ENV !== 'production' && (otp === '123456' || otp === '000000'));
-    const isValid = isDevMasterCode || otplib.verify({ token: otp, secret: user.mfaSecret });
+    let isValid = isDevMasterCode;
+    
+    if (!isValid && user.mfaSecret) {
+      const verifyResult = await otplib.verify({ token: String(otp).trim(), secret: user.mfaSecret });
+      isValid = Boolean(verifyResult && verifyResult.valid);
+    }
     
     if (!isValid) {
       return res.status(400).json({ success: false, message: "Invalid Authenticator code" });

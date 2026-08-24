@@ -1,31 +1,40 @@
 const nodemailer = require('nodemailer');
 
-const sendEmail = async ({ to, subject, html, attachments = [], fromName }) => {
+const sendEmail = async ({ to, subject, html, attachments = [], fromName, smtpConfig = null, replyTo = null }) => {
   try {
-    // These should be in .env
-    // These should be in .env
-      // Configure transporter dynamically using host and port (defaults to Outlook/Office 365)
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'smtp.office365.com',
-        port: parseInt(process.env.SMTP_PORT || '587'),
-        secure: process.env.SMTP_SECURE === 'true', // false for TLS/STARTTLS (587), true for SSL (465)
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        }
-      });
+    // Determine dynamic vs fallback global SMTP credentials
+    const hasCustomSmtp = smtpConfig && smtpConfig.user && smtpConfig.pass;
 
-    const resolvedFromName = fromName || process.env.SMTP_SENDER_NAME || 'Nabhira Technologies';
+    const host = hasCustomSmtp && smtpConfig.host ? smtpConfig.host : process.env.SMTP_HOST;
+    const port = hasCustomSmtp && smtpConfig.port ? parseInt(smtpConfig.port) : parseInt(process.env.SMTP_PORT || '587');
+    const secure = hasCustomSmtp && (smtpConfig.secure !== undefined) ? Boolean(smtpConfig.secure) : (process.env.SMTP_SECURE === 'true');
+    const user = hasCustomSmtp ? smtpConfig.user : process.env.SMTP_USER;
+    const pass = hasCustomSmtp ? smtpConfig.pass : process.env.SMTP_PASS;
+
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: {
+        user,
+        pass,
+      }
+    });
+
+    const resolvedFromName = fromName || process.env.SMTP_SENDER_NAME || 'Hutech Solutions';
+    const senderEmail = user || process.env.SMTP_USER;
+
     const mailOptions = {
-      from: `"${resolvedFromName}" <${process.env.SMTP_USER || 'deepsikha@hutechsolutions.com'}>`,
+      from: `"${resolvedFromName}" <${senderEmail}>`,
       to,
       subject,
       html,
-      attachments
+      attachments,
+      ...(replyTo && { replyTo })
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent: ' + info.response);
+    console.log(`Email sent via ${user}: ` + info.response);
     return { success: true, info };
   } catch (error) {
     console.error('Email error:', error);
