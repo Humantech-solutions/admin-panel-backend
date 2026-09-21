@@ -4,6 +4,38 @@ const User = require('../models/userModel');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { sendEmail } = require('../utils/emailUtil');
+const { encrypt } = require('../utils/cryptoUtil');
+
+// ── helper: sanitize company output (mask SMTP passwords) ────────────────────
+function sanitizeCompany(company) {
+  if (!company) return company;
+  const doc = company.toObject ? company.toObject() : JSON.parse(JSON.stringify(company));
+  ['adminSmtp', 'careersSmtp', 'salesSmtp', 'contactSmtp'].forEach((key) => {
+    if (doc[key]) {
+      doc[key].isConfigured = Boolean(doc[key].user && doc[key].pass);
+      doc[key].pass = doc[key].pass ? '••••••••' : undefined;
+    }
+  });
+  return doc;
+}
+
+// ── helper: format & encrypt SMTP payload ────────────────────────────────────
+function formatSmtpForSave(newSmtp, existingSmtp) {
+  if (!newSmtp) return undefined;
+  let pass = newSmtp.pass;
+  if (!pass || pass === '••••••••') {
+    pass = existingSmtp?.pass;
+  } else {
+    pass = encrypt(pass);
+  }
+  return {
+    host: newSmtp.host?.trim() || undefined,
+    port: newSmtp.port ? Number(newSmtp.port) : undefined,
+    user: newSmtp.user?.trim() || undefined,
+    pass,
+    secure: Boolean(newSmtp.secure),
+  };
+}
 
 // ── helper: generate unique slug ─────────────────────────────────────────────
 async function resolveUniqueSlug(base, Model) {
@@ -31,7 +63,11 @@ exports.getAllCompanies = async (req, res) => {
         return { ...company, websites };
       })
     );
-    res.json({ success: true, count: companiesWithWebsites.length, companies: companiesWithWebsites });
+    res.json({ 
+      success: true, 
+      count: companiesWithWebsites.length, 
+      companies: companiesWithWebsites.map(c => sanitizeCompany(c)) 
+    });
   } catch (error) {
     console.error('Error fetching companies:', error);
     res.status(500).json({ success: false, message: 'Server error fetching companies' });
@@ -42,7 +78,11 @@ exports.getAllCompanies = async (req, res) => {
 exports.getActiveCompanies = async (req, res) => {
   try {
     const companies = await Company.find({ isActive: true }).sort({ name: 1 }).lean();
-    res.json({ success: true, count: companies.length, companies });
+    res.json({ 
+      success: true, 
+      count: companies.length, 
+      companies: companies.map(c => sanitizeCompany(c)) 
+    });
   } catch (error) {
     console.error('Error fetching active companies:', error);
     res.status(500).json({ success: false, message: 'Server error fetching active companies' });
@@ -65,7 +105,7 @@ exports.getCompanyByIdOrSlug = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Company not found' });
     }
 
-    res.json({ success: true, company });
+    res.json({ success: true, company: sanitizeCompany(company) });
   } catch (error) {
     console.error('Error fetching company details:', error);
     res.status(500).json({ success: false, message: 'Server error fetching company details' });
@@ -113,10 +153,10 @@ exports.createCompany = async (req, res) => {
       salesNotificationEmail,
       contactNotificationEmail,
       fromEmailName,
-      ...(adminSmtp && { adminSmtp }),
-      ...(careersSmtp && { careersSmtp }),
-      ...(salesSmtp && { salesSmtp }),
-      ...(contactSmtp && { contactSmtp }),
+      ...(adminSmtp && { adminSmtp: formatSmtpForSave(adminSmtp) }),
+      ...(careersSmtp && { careersSmtp: formatSmtpForSave(careersSmtp) }),
+      ...(salesSmtp && { salesSmtp: formatSmtpForSave(salesSmtp) }),
+      ...(contactSmtp && { contactSmtp: formatSmtpForSave(contactSmtp) }),
     });
 
     await newCompany.save();
@@ -227,10 +267,10 @@ exports.updateCompany = async (req, res) => {
     if (fromEmailName !== undefined) company.fromEmailName = fromEmailName;
     if (isActive !== undefined) company.isActive = isActive;
 
-    if (adminSmtp !== undefined) company.adminSmtp = adminSmtp;
-    if (careersSmtp !== undefined) company.careersSmtp = careersSmtp;
-    if (salesSmtp !== undefined) company.salesSmtp = salesSmtp;
-    if (contactSmtp !== undefined) company.contactSmtp = contactSmtp;
+    if (adminSmtp !== undefined) company.adminSmtp = formatSmtpForSave(adminSmtp, company.adminSmtp);
+    if (careersSmtp !== undefined) company.careersSmtp = formatSmtpForSave(careersSmtp, company.careersSmtp);
+    if (salesSmtp !== undefined) company.salesSmtp = formatSmtpForSave(salesSmtp, company.salesSmtp);
+    if (contactSmtp !== undefined) company.contactSmtp = formatSmtpForSave(contactSmtp, company.contactSmtp);
 
     // Check if new slug conflicts with another company
     if (slug && slug.toLowerCase() !== company.slug) {
@@ -243,7 +283,7 @@ exports.updateCompany = async (req, res) => {
 
     await company.save();
 
-    res.json({ success: true, message: 'Company updated successfully', company });
+    res.json({ success: true, message: 'Company updated successfully', company: sanitizeCompany(company) });
   } catch (error) {
     console.error('Error updating company:', error);
     res.status(500).json({ success: false, message: 'Server error during company update', details: error.message });

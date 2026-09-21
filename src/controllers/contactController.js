@@ -137,28 +137,43 @@ exports.submitContact = async (req, res) => {
   }
 };
 
-// GET ALL CONTACTS (with optional category and project filter)
+// GET ALL CONTACTS (with strict tenant isolation)
 exports.getAllContacts = async (req, res) => {
   try {
-    const { category, project } = req.query;
+    const { category, project, company, website } = req.query;
     const filter = {};
     if (category) filter.category = category;
-    
-    if (project) {
-      // Resolve company slug to companyId for indexed search
-      const company = await Company.findOne({ slug: project.toLowerCase() }).lean();
-      if (company) {
-        filter.companyId = company._id;
-      } else {
-        // Fallback for non-migrated/legacy data or missing company slugs
-        filter.project = project;
+
+    // Block Superadmin from accessing organization lead data
+    if (req.user && req.user.role === 'superadmin') {
+      return res.status(403).json({ success: false, message: 'Superadmin accounts manage platform onboarding and settings only and cannot access company lead data.' });
+    }
+
+    if (req.user && req.user.companyId) {
+      filter.companyId = req.user.companyId;
+    } else {
+      return res.status(400).json({ success: false, message: 'Company account setup required.' });
+    }
+
+    // Website-specific filter (within company scope)
+    if (website && website !== 'all') {
+      const foundWeb = await Website.findOne({
+        $or: [
+          { slug: website.toLowerCase() },
+          ...(website.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: website }] : [])
+        ]
+      }).lean();
+
+      if (foundWeb) {
+        filter.websiteId = foundWeb._id;
       }
     }
     
     const contacts = await Contact.find(filter)
       .populate('companyId', 'name slug')
+      .populate('websiteId', 'name slug url')
       .sort({ submittedAt: -1 })
-      .lean(); // Optimization: returns plain JS objects
+      .lean();
 
     res.json({ success: true, contacts });
   } catch (error) {

@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const otplib = require('otplib');
 const qrcode = require('qrcode');
 const { sendEmail } = require('../utils/emailUtil');
+const { encrypt } = require('../utils/cryptoUtil');
 
 const SECRET = process.env.JWT_SECRET || "mysecretkey";
 const MFA_SECRET = process.env.MFA_JWT_SECRET || "mfatempsecretkey";
@@ -211,8 +212,17 @@ exports.verifyMfa = async (req, res) => {
       await user.save();
     }
 
-    // Generate real access token
-    const token = jwt.sign({ id: user._id, email: user.email }, SECRET, { expiresIn: "24h" });
+    // Generate real access token with role and companyId for tenant isolation
+    const token = jwt.sign(
+      {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        companyId: user.companyId,
+      },
+      SECRET,
+      { expiresIn: "24h" }
+    );
 
     res.json({
       success: true,
@@ -265,7 +275,7 @@ exports.changePassword = async (req, res) => {
 // SETUP COMPANY & WEBSITE AFTER MFA
 exports.setupCompany = async (req, res) => {
   try {
-    const { companyName, siteUrl, adminEmail, fromEmailName } = req.body;
+    const { companyName, siteUrl, adminEmail, fromEmailName, adminSmtp } = req.body;
     if (!companyName || !companyName.trim()) {
       return res.status(400).json({ success: false, message: "Company name is required." });
     }
@@ -278,6 +288,18 @@ exports.setupCompany = async (req, res) => {
     const finalAdminEmail = adminEmail?.trim().toLowerCase() || user.email;
     const finalFromEmailName = fromEmailName?.trim() || user.name;
 
+    // Build Smtp payload if provided
+    let smtpPayload = undefined;
+    if (adminSmtp && (adminSmtp.user || adminSmtp.host)) {
+      smtpPayload = {
+        host: adminSmtp.host?.trim() || undefined,
+        port: adminSmtp.port ? Number(adminSmtp.port) : 587,
+        user: adminSmtp.user?.trim() || undefined,
+        pass: adminSmtp.pass ? encrypt(adminSmtp.pass) : undefined,
+        secure: Boolean(adminSmtp.secure),
+      };
+    }
+
     // Create Company
     const companySlug = await resolveUniqueSlug(companyName, Company);
     const company = await Company.create({
@@ -285,6 +307,7 @@ exports.setupCompany = async (req, res) => {
       slug: companySlug,
       adminEmail: finalAdminEmail,
       fromEmailName: finalFromEmailName,
+      adminSmtp: smtpPayload,
       isActive: true,
     });
 

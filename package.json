@@ -6,7 +6,8 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "db:superadmin": "node scripts/resetAndSeed.js",
-    "db:clear": "node scripts/clearDatabase.js"
+    "db:clear": "node scripts/clearDatabase.js",
+    "encrypt-pass": "node -e \"const { encrypt } = require('./src/utils/cryptoUtil'); const p = process.argv[1]; if(!p) { console.log('Usage: npm run encrypt-pass \\\"your_password\\\"'); process.exit(1); } console.log('\\nEncrypted Password:\\n' + encrypt(p) + '\\n');\""
   },
   "keywords": [],
   "author": "",
