@@ -24,6 +24,10 @@ const userSchema = new mongoose.Schema({
     ref: 'Company',
     default: null
   },
+  accessibleWebsites: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Website'
+  }],
   mfaSecret: {
     type: String
   },

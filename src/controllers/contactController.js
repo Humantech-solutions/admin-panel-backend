@@ -1,7 +1,9 @@
 const Contact = require('../models/contactModel');
 const Company = require('../models/companyModel');
+const Website = require('../models/websiteModel');
 const { sendEmail } = require('../utils/emailUtil');
 const { resolveCompanyAndWebsite } = require('../utils/resolverUtil');
+const { getHierarchyFilter } = require('../utils/permissionUtil');
 
 // SUBMIT CONTACT FORM
 exports.submitContact = async (req, res) => {
@@ -141,19 +143,12 @@ exports.submitContact = async (req, res) => {
 exports.getAllContacts = async (req, res) => {
   try {
     const { category, project, company, website } = req.query;
-    const filter = {};
+    
+    const hierarchyResult = getHierarchyFilter(req, res);
+    if (!hierarchyResult.success) return;
+    const filter = hierarchyResult.filter;
+    
     if (category) filter.category = category;
-
-    // Block Superadmin from accessing organization lead data
-    if (req.user && req.user.role === 'superadmin') {
-      return res.status(403).json({ success: false, message: 'Superadmin accounts manage platform onboarding and settings only and cannot access company lead data.' });
-    }
-
-    if (req.user && req.user.companyId) {
-      filter.companyId = req.user.companyId;
-    } else {
-      return res.status(400).json({ success: false, message: 'Company account setup required.' });
-    }
 
     // Website-specific filter (within company scope)
     if (website && website !== 'all') {

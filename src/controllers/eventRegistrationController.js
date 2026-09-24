@@ -1,6 +1,7 @@
 const EventRegistration = require('../models/eventRegistrationModel');
 const { sendEmail } = require('../utils/emailUtil');
 const { resolveCompanyAndWebsite } = require('../utils/resolverUtil');
+const { getHierarchyFilter } = require('../utils/permissionUtil');
 
 // SUBMIT REGISTRATION
 exports.submitRegistration = async (req, res) => {
@@ -105,18 +106,9 @@ exports.submitRegistration = async (req, res) => {
 exports.getAllRegistrations = async (req, res) => {
   try {
     const { company, project, website } = req.query;
-    const filter = {};
-
-    // Block Superadmin from accessing organization lead data
-    if (req.user && req.user.role === 'superadmin') {
-      return res.status(403).json({ success: false, message: 'Superadmin accounts manage platform onboarding and settings only and cannot access company lead data.' });
-    }
-
-    if (req.user && req.user.companyId) {
-      filter.companyId = req.user.companyId;
-    } else {
-      return res.status(400).json({ success: false, message: 'Company account setup required.' });
-    }
+    const hierarchyResult = getHierarchyFilter(req, res);
+    if (!hierarchyResult.success) return;
+    const filter = hierarchyResult.filter;
 
     if (website && website !== 'all') {
       const Website = require('../models/websiteModel');
@@ -143,3 +135,4 @@ exports.getAllRegistrations = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error fetching registrations" });
   }
 };
+
