@@ -63,7 +63,7 @@ async function resolveCompanyAndWebsite(body = {}, req = {}) {
         const parsedUrl = new URL(originHeader);
         const host = parsedUrl.hostname.replace(/^www\./, '');
 
-        if (!website) {
+        if (!website && !host.includes('localhost') && !host.includes('127.0.0.1')) {
           const matchedWeb = await Website.findOne({
             $or: [
               { url: { $regex: host, $options: 'i' } },

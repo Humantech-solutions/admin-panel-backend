@@ -189,17 +189,9 @@ exports.submitDocumentRequest = async (req, res) => {
 // GET ALL DOCUMENT REQUESTS (Admin only, filterable by project)
 exports.getAllRequests = async (req, res) => {
   try {
-    // Block Superadmin from accessing organization lead data
-    if (req.user && req.user.role === 'superadmin') {
-      return res.status(403).json({ success: false, message: 'Superadmin accounts manage platform onboarding and settings only and cannot access company lead data.' });
-    }
-
-    const filter = {};
-    if (req.user && req.user.companyId) {
-      filter.companyId = req.user.companyId;
-    } else {
-      return res.status(400).json({ success: false, message: 'Company account setup required.' });
-    }
+    const hierarchyResult = getHierarchyFilter(req, res);
+    if (!hierarchyResult.success) return;
+    const filter = hierarchyResult.filter;
 
     const requests = await DocumentRequest.find(filter)
       .populate('companyId', 'name slug')
@@ -213,4 +205,5 @@ exports.getAllRequests = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error fetching document requests." });
   }
 };
+
 
