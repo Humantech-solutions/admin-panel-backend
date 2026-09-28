@@ -51,7 +51,7 @@ exports.submitChatQuery = async (req, res) => {
             </tr>
           </table>
           <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="font-size: 11px; color: #aaa;">This notification was sent from the Nabhira website chatbot.</p>
+          <p style="font-size: 11px; color: #aaa;">This notification was sent from the SahajCRM website chatbot.</p>
         </div>
       `
     });
@@ -59,7 +59,7 @@ exports.submitChatQuery = async (req, res) => {
     // Send confirmation to user
     await sendEmail({
       to: email,
-      subject: 'We received your message — Nabhira Technologies',
+      subject: 'We received your message — SahajCRM Technologies',
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
           <h2 style="color: #11253e;">Thank you for reaching out!</h2>
@@ -70,7 +70,7 @@ exports.submitChatQuery = async (req, res) => {
           </div>
           <p style="color: #555; font-size: 14px;">If this is urgent, you can also reach us at <a href="mailto:info@nabhira.com" style="color: #f99d1c;">info@nabhira.com</a>.</p>
           <hr style="border: 0; border-top: 1px solid #eee; margin: 24px 0;" />
-          <p style="font-size: 11px; color: #aaa;">Nabhira Technologies — Architecting the Future.</p>
+          <p style="font-size: 11px; color: #aaa;">SahajCRM Technologies — Architecting the Future.</p>
         </div>
       `
     });
