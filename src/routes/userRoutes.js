@@ -3,6 +3,7 @@ const router = express.Router();
 
 const authMiddleware = require('../middleware/authMiddleware');
 const User = require('../models/userModel');
+const userController = require('../controllers/userController');
 
 router.get('/profile', authMiddleware, async (req, res) => {
   try {
@@ -20,5 +21,11 @@ router.get('/profile', authMiddleware, async (req, res) => {
     res.status(500).json({ success: false, message: "Server error fetching profile details" });
   }
 });
+
+// Collaborator routes
+router.get('/', authMiddleware, userController.getUsers);
+router.post('/', authMiddleware, userController.createUser);
+router.put('/:id', authMiddleware, userController.updateUser);
+router.delete('/:id', authMiddleware, userController.deleteUser);
 
 module.exports = router;

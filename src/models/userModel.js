@@ -16,8 +16,8 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['superadmin', 'company_admin', 'company_user', 'viewer'],
-    default: 'superadmin'
+    enum: ['superadmin', 'super_editor', 'super_viewer', 'company_admin', 'company_editor', 'company_viewer'],
+    default: 'company_admin'
   },
   companyId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -29,6 +29,9 @@ const userSchema = new mongoose.Schema({
     ref: 'Website'
   }],
   mfaSecret: {
+    type: String
+  },
+  emailOtp: {
     type: String
   },
   mfaEnabled: {

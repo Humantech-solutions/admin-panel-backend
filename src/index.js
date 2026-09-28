@@ -68,14 +68,17 @@ app.get('/', (req, res) => {
 });
 
 // Database connection
-const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/nabhira_db';
-mongoose.connect(mongoURI)
+const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/sahajCRM';
+mongoose.connect(mongoURI, {
+  serverSelectionTimeoutMS: 5000 // Fail fast if MongoDB is unreachable
+})
   .then(async () => {
     console.log('✅ MongoDB connected successfully');
     await seedDefaults();
   })
-  .catch(err => console.error('❌ MongoDB connection error:', err));
-
+  .catch(err => {
+    console.error('❌ MongoDB connection error:', err);
+  });
 
 const PORT = process.env.PORT || 8001;
 app.listen(PORT, () => {
