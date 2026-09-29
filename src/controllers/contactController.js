@@ -148,7 +148,7 @@ exports.getAllContacts = async (req, res) => {
     if (!hierarchyResult.success) return;
     const filter = hierarchyResult.filter;
     
-    if (category) filter.category = category;
+    if (category) filter.category = new RegExp(`^${category}$`, 'i');
 
     // Website-specific filter (within company scope)
     if (website && website !== 'all') {
