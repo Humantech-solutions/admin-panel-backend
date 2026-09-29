@@ -164,6 +164,20 @@ exports.getAllContacts = async (req, res) => {
       }
     }
     
+    // Company-specific filter (for super admins who want to view a specific company)
+    if (company && company !== 'all') {
+      const foundComp = await Company.findOne({
+        $or: [
+          { slug: company.toLowerCase() },
+          ...(company.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: company }] : [])
+        ]
+      }).lean();
+      
+      if (foundComp) {
+        filter.companyId = foundComp._id;
+      }
+    }
+    
     const contacts = await Contact.find(filter)
       .populate('companyId', 'name slug')
       .populate('websiteId', 'name slug url')
