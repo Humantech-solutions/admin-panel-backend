@@ -103,6 +103,17 @@ exports.getAllChatQueries = async (req, res) => {
       }
     }
 
+    if (company && company !== 'all') {
+      const Company = require('../models/companyModel');
+      const foundComp = await Company.findOne({
+        $or: [
+          { slug: company.toLowerCase() },
+          ...(company.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: company }] : [])
+        ]
+      }).lean();
+      if (foundComp) filter.companyId = foundComp._id;
+    }
+
     const queries = await ChatQuery.find(filter)
       .populate('companyId', 'name slug')
       .populate('websiteId', 'name slug url')

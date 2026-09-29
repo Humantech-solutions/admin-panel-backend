@@ -15,8 +15,8 @@ exports.getHierarchyFilter = (req, res) => {
   // Frontend roles: "admin", "manager", "viewer"
   // Backend roles: "superadmin", "company_admin", "company_user", "viewer"
   
-  if (req.user.role === 'superadmin') {
-    // Superadmin has full access, no base filter required.
+  if (['superadmin', 'super_editor', 'super_viewer'].includes(req.user.role)) {
+    // Super roles have full access, no base filter required.
     return { success: true, filter };
   }
 
@@ -26,8 +26,8 @@ exports.getHierarchyFilter = (req, res) => {
 
   filter.companyId = req.user.companyId;
 
-  // If role is company_admin or admin (frontend equivalent), they get full access to the company's data.
-  if (req.user.role === 'company_admin' || req.user.role === 'admin') {
+  // If role is company_admin or company_editor or admin (frontend equivalent), they get full access to the company's data.
+  if (['company_admin', 'company_editor', 'admin'].includes(req.user.role)) {
     return { success: true, filter };
   }
 
