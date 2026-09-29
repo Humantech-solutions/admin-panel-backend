@@ -17,6 +17,7 @@ const chatRoutes = require('./routes/chatRoutes');
 const companyRoutes = require('./routes/companyRoutes');
 const websiteRoutes = require('./routes/websiteRoutes');
 const documentRequestRoutes = require('./routes/documentRequestRoutes');
+const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const seedDefaults = require('./utils/seeder');
 
 // Configure CORS options
@@ -62,6 +63,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/websites', websiteRoutes);
 app.use('/api/documents', documentRequestRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
 
 app.get('/', (req, res) => {
   res.send('API running 🚀');
@@ -75,6 +77,8 @@ mongoose.connect(mongoURI, {
   .then(async () => {
     console.log('✅ MongoDB connected successfully');
     await seedDefaults();
+    const { startPolling } = require('./utils/blogPollingService');
+    startPolling();
   })
   .catch(err => {
     console.error('❌ MongoDB connection error:', err);
