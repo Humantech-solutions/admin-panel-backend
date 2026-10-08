@@ -504,9 +504,21 @@ exports.setupCompany = async (req, res) => {
     user.role = 'company_admin';
     await user.save();
 
+    const token = jwt.sign(
+      {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        companyId: user.companyId,
+      },
+      SECRET,
+      { expiresIn: '1d' }
+    );
+
     res.json({
       success: true,
       message: "Company setup complete",
+      token,
       company,
       website,
       user: {

@@ -92,7 +92,7 @@ exports.getWebsiteByIdOrSlug = async (req, res) => {
 // CREATE NEW WEBSITE
 exports.createWebsite = async (req, res) => {
   try {
-    const { name, slug, url, companyId, isActive } = req.body;
+    const { name, slug, url, companyId, isActive, smtpConfig } = req.body;
     let rawCompanyId = companyId || req.params.companyId;
 
     if (!name || !rawCompanyId) {
@@ -119,6 +119,7 @@ exports.createWebsite = async (req, res) => {
       url,
       companyId: company._id,
       isActive: isActive !== undefined ? isActive : true,
+      ...(smtpConfig && { smtpConfig })
     });
 
     await newWebsite.save();
