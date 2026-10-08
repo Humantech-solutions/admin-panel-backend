@@ -111,17 +111,17 @@ async function resolveCompanyAndWebsite(body = {}, req = {}) {
     websiteId: website ? website._id : undefined,
     companyName: company ? company.name : 'Default Company',
     websiteName: website ? website.name : undefined,
-    adminNotificationEmail: company?.adminEmail || 'trupti@hutechsolutions.com',
-    careersNotificationEmail: company?.careersNotificationEmail || company?.adminEmail || 'trupti@hutechsolutions.com',
-    salesNotificationEmail: company?.salesNotificationEmail || company?.adminEmail || 'trupti@hutechsolutions.com',
-    contactNotificationEmail: company?.contactNotificationEmail || company?.adminEmail || 'trupti@hutechsolutions.com',
-    fromEmailName: company ? (company.fromEmailName || company.name) : 'Hutech Solutions',
-    projectSlug: candidateSlug || (company ? company.slug : 'hutech'),
-    // Department SMTP configurations (defaulting to global email setup if not custom-configured)
-    adminSmtp: company?.adminSmtp?.user ? company.adminSmtp : globalSmtp,
-    careersSmtp: company?.careersSmtp?.user ? company.careersSmtp : globalSmtp,
-    salesSmtp: company?.salesSmtp?.user ? company.salesSmtp : globalSmtp,
-    contactSmtp: company?.contactSmtp?.user ? company.contactSmtp : globalSmtp,
+    adminNotificationEmail: company?.adminEmail || process.env.SMTP_USER,
+    careersNotificationEmail: company?.careersNotificationEmail || company?.adminEmail || process.env.SMTP_USER,
+    salesNotificationEmail: company?.salesNotificationEmail || company?.adminEmail || process.env.SMTP_USER,
+    contactNotificationEmail: company?.contactNotificationEmail || company?.adminEmail || process.env.SMTP_USER,
+    fromEmailName: company ? (company.fromEmailName || company.name) : (process.env.SMTP_SENDER_NAME || 'Default Company'),
+    projectSlug: candidateSlug || (company ? company.slug : 'default'),
+    // Department SMTP configurations (defaulting to website -> company -> global)
+    adminSmtp: website?.smtpConfig?.user ? website.smtpConfig : (company?.adminSmtp?.user ? company.adminSmtp : globalSmtp),
+    careersSmtp: website?.smtpConfig?.user ? website.smtpConfig : (company?.careersSmtp?.user ? company.careersSmtp : (company?.adminSmtp?.user ? company.adminSmtp : globalSmtp)),
+    salesSmtp: website?.smtpConfig?.user ? website.smtpConfig : (company?.salesSmtp?.user ? company.salesSmtp : (company?.adminSmtp?.user ? company.adminSmtp : globalSmtp)),
+    contactSmtp: website?.smtpConfig?.user ? website.smtpConfig : (company?.contactSmtp?.user ? company.contactSmtp : (company?.adminSmtp?.user ? company.adminSmtp : globalSmtp)),
   };
 }
 

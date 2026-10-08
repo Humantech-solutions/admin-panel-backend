@@ -25,6 +25,14 @@ const websiteSchema = new mongoose.Schema({
     required: [true, 'Company reference is required'],
     index: true,
   },
+  // Optional website-specific SMTP to override company defaults
+  smtpConfig: {
+    host: { type: String, trim: true },
+    port: { type: Number },
+    user: { type: String, trim: true },
+    pass: { type: String, trim: true },
+    secure: { type: Boolean, default: false }
+  },
   isActive: {
     type: Boolean,
     default: true,
