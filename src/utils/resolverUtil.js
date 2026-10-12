@@ -34,13 +34,30 @@ async function resolveCompanyAndWebsite(body = {}, req = {}) {
     company = await Company.findById(companyId);
   }
 
-  // 3. Resolve by string slug/name identifier (project, website, websiteSlug, company, companySlug)
-  const candidateSlug = (websiteSlug || websiteParam || project || companySlug || companyParam || '').toLowerCase().trim();
+  // 3. Resolve by string slug/name identifier or URL (project, website, websiteSlug, company, companySlug, url, siteUrl)
+  const candidateSlug = (websiteSlug || websiteParam || project || companySlug || companyParam || body.url || body.siteUrl || body.websiteUrl || '').toLowerCase().trim();
 
   if (candidateSlug && (!company || !website)) {
-    // Search Website model by slug first
+    // Extract hostname if candidate looks like a URL
+    let candidateHost = '';
+    try {
+      if (candidateSlug.includes('://')) {
+        candidateHost = new URL(candidateSlug).hostname.replace(/^www\./, '');
+      } else if (candidateSlug.includes('.')) {
+        candidateHost = candidateSlug.replace(/^www\./, '').split('/')[0];
+      }
+    } catch {
+      candidateHost = '';
+    }
+
+    // Search Website model by slug or url first
     if (!website) {
-      const foundWeb = await Website.findOne({ slug: candidateSlug }).populate('companyId');
+      const webQuery = [{ slug: candidateSlug }, { url: candidateSlug }];
+      if (candidateHost) {
+        webQuery.push({ url: { $regex: candidateHost, $options: 'i' } });
+      }
+
+      const foundWeb = await Website.findOne({ $or: webQuery }).populate('companyId');
       if (foundWeb) {
         website = foundWeb;
         if (foundWeb.companyId) {
@@ -49,9 +66,15 @@ async function resolveCompanyAndWebsite(body = {}, req = {}) {
       }
     }
 
-    // Search Company model by slug if company not resolved yet
+    // Search Company model by slug or exact name if company not resolved yet
     if (!company) {
-      company = await Company.findOne({ slug: candidateSlug });
+      const cleanRegex = candidateSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      company = await Company.findOne({
+        $or: [
+          { slug: candidateSlug },
+          { name: { $regex: `^${cleanRegex}$`, $options: 'i' } }
+        ]
+      });
     }
   }
 
@@ -89,9 +112,9 @@ async function resolveCompanyAndWebsite(body = {}, req = {}) {
     website = await Website.findOne({ companyId: company._id, isActive: true });
   }
 
-  // 6. Global fallback: pick first active company if nothing matched
+  // 6. Global fallback: pick newest active company if nothing matched
   if (!company) {
-    company = await Company.findOne({ isActive: true }).sort({ createdAt: 1 });
+    company = await Company.findOne({ isActive: true }).sort({ createdAt: -1 });
     if (company && !website) {
       website = await Website.findOne({ companyId: company._id, isActive: true });
     }
@@ -106,6 +129,13 @@ async function resolveCompanyAndWebsite(body = {}, req = {}) {
     pass: process.env.SMTP_PASS,
   } : null;
 
+  // Resolve department SMTP credentials with cascading fallback: Website -> Company -> Global
+  const websiteSmtp = (website?.smtpConfig?.user && website?.smtpConfig?.pass) ? website.smtpConfig : null;
+  const companyAdminSmtp = (company?.adminSmtp?.user && company?.adminSmtp?.pass) ? company.adminSmtp : null;
+  const companyCareersSmtp = (company?.careersSmtp?.user && company?.careersSmtp?.pass) ? company.careersSmtp : null;
+  const companySalesSmtp = (company?.salesSmtp?.user && company?.salesSmtp?.pass) ? company.salesSmtp : null;
+  const companyContactSmtp = (company?.contactSmtp?.user && company?.contactSmtp?.pass) ? company.contactSmtp : null;
+
   return {
     companyId: company ? company._id : undefined,
     websiteId: website ? website._id : undefined,
@@ -117,11 +147,11 @@ async function resolveCompanyAndWebsite(body = {}, req = {}) {
     contactNotificationEmail: company?.contactNotificationEmail || company?.adminEmail || process.env.SMTP_USER,
     fromEmailName: company ? (company.fromEmailName || company.name) : (process.env.SMTP_SENDER_NAME || 'Default Company'),
     projectSlug: candidateSlug || (company ? company.slug : 'default'),
-    // Department SMTP configurations (defaulting to website -> company -> global)
-    adminSmtp: website?.smtpConfig?.user ? website.smtpConfig : (company?.adminSmtp?.user ? company.adminSmtp : globalSmtp),
-    careersSmtp: website?.smtpConfig?.user ? website.smtpConfig : (company?.careersSmtp?.user ? company.careersSmtp : (company?.adminSmtp?.user ? company.adminSmtp : globalSmtp)),
-    salesSmtp: website?.smtpConfig?.user ? website.smtpConfig : (company?.salesSmtp?.user ? company.salesSmtp : (company?.adminSmtp?.user ? company.adminSmtp : globalSmtp)),
-    contactSmtp: website?.smtpConfig?.user ? website.smtpConfig : (company?.contactSmtp?.user ? company.contactSmtp : (company?.adminSmtp?.user ? company.adminSmtp : globalSmtp)),
+    // Department SMTP configurations (cascading: website -> company department -> company admin -> global)
+    adminSmtp: websiteSmtp || companyAdminSmtp || globalSmtp,
+    careersSmtp: websiteSmtp || companyCareersSmtp || companyAdminSmtp || globalSmtp,
+    salesSmtp: websiteSmtp || companySalesSmtp || companyAdminSmtp || globalSmtp,
+    contactSmtp: websiteSmtp || companyContactSmtp || companyAdminSmtp || globalSmtp,
   };
 }
 

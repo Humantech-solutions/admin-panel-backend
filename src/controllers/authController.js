@@ -450,7 +450,17 @@ exports.changePasswordTemp = async (req, res) => {
 // SETUP COMPANY & WEBSITE AFTER MFA
 exports.setupCompany = async (req, res) => {
   try {
-    const { companyName, siteUrl, adminEmail, fromEmailName, adminSmtp } = req.body;
+    const {
+      companyName,
+      siteUrl,
+      adminEmail,
+      fromEmailName,
+      careersNotificationEmail,
+      salesNotificationEmail,
+      contactNotificationEmail,
+      adminSmtp
+    } = req.body;
+
     if (!companyName || !companyName.trim()) {
       return res.status(400).json({ success: false, message: "Company name is required." });
     }
@@ -461,7 +471,10 @@ exports.setupCompany = async (req, res) => {
     }
 
     const finalAdminEmail = adminEmail?.trim().toLowerCase() || user.email;
-    const finalFromEmailName = fromEmailName?.trim() || user.name;
+    const finalFromEmailName = fromEmailName?.trim() || companyName.trim();
+    const finalCareersEmail = careersNotificationEmail?.trim().toLowerCase() || finalAdminEmail;
+    const finalSalesEmail = salesNotificationEmail?.trim().toLowerCase() || finalAdminEmail;
+    const finalContactEmail = contactNotificationEmail?.trim().toLowerCase() || finalAdminEmail;
 
     // Build Smtp payload if provided
     let smtpPayload = undefined;
@@ -482,6 +495,9 @@ exports.setupCompany = async (req, res) => {
       slug: companySlug,
       adminEmail: finalAdminEmail,
       fromEmailName: finalFromEmailName,
+      careersNotificationEmail: finalCareersEmail,
+      salesNotificationEmail: finalSalesEmail,
+      contactNotificationEmail: finalContactEmail,
       adminSmtp: smtpPayload,
       isActive: true,
     });
@@ -495,6 +511,7 @@ exports.setupCompany = async (req, res) => {
         slug: websiteSlug,
         url: siteUrl.trim(),
         companyId: company._id,
+        smtpConfig: smtpPayload,
         isActive: true,
       });
     }
