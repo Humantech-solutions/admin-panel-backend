@@ -58,12 +58,15 @@ app.use('/api/users', userRoutes);
 app.use('/api/career', careerRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/event-registration', eventRegistrationRoutes);
+app.use('/api/event', eventRegistrationRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/websites', websiteRoutes);
 app.use('/api/documents', documentRequestRoutes);
+app.use('/api/document', documentRequestRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/subscription', subscriptionRoutes);
 
 app.get('/', (req, res) => {
   res.send('API running 🚀');

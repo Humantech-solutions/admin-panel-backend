@@ -1,9 +1,7 @@
 const Contact = require('../models/contactModel');
-const Company = require('../models/companyModel');
-const Website = require('../models/websiteModel');
 const { sendEmail } = require('../utils/emailUtil');
 const { resolveCompanyAndWebsite } = require('../utils/resolverUtil');
-const { getHierarchyFilter } = require('../utils/permissionUtil');
+const { resolveHierarchyAndScopeFilter } = require('../utils/permissionUtil');
 
 // SUBMIT CONTACT FORM
 exports.submitContact = async (req, res) => {
@@ -142,41 +140,15 @@ exports.submitContact = async (req, res) => {
 // GET ALL CONTACTS (with strict tenant isolation)
 exports.getAllContacts = async (req, res) => {
   try {
-    const { category, project, company, website } = req.query;
-    
-    const hierarchyResult = getHierarchyFilter(req, res);
-    if (!hierarchyResult.success) return;
-    const filter = hierarchyResult.filter;
-    
+    const { category } = req.query;
+
+    const filterRes = await resolveHierarchyAndScopeFilter(req, res);
+    if (!filterRes.success) return;
+    const filter = filterRes.filter;
+
     if (category) filter.category = new RegExp(`^${category}$`, 'i');
 
-    // Website-specific filter (within company scope)
-    if (website && website !== 'all') {
-      const foundWeb = await Website.findOne({
-        $or: [
-          { slug: website.toLowerCase() },
-          ...(website.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: website }] : [])
-        ]
-      }).lean();
-
-      if (foundWeb) {
-        filter.websiteId = foundWeb._id;
-      }
-    }
     
-    // Company-specific filter (for super admins who want to view a specific company)
-    if (company && company !== 'all') {
-      const foundComp = await Company.findOne({
-        $or: [
-          { slug: company.toLowerCase() },
-          ...(company.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: company }] : [])
-        ]
-      }).lean();
-      
-      if (foundComp) {
-        filter.companyId = foundComp._id;
-      }
-    }
     
     const contacts = await Contact.find(filter)
       .populate('companyId', 'name slug')

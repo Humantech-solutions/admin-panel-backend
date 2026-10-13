@@ -3,7 +3,7 @@ const Career = require('../models/careerModel');
 const Company = require('../models/companyModel');
 const { sendEmail } = require('../utils/emailUtil');
 const { resolveCompanyAndWebsite } = require('../utils/resolverUtil');
-const { getHierarchyFilter } = require('../utils/permissionUtil');
+const { resolveHierarchyAndScopeFilter } = require('../utils/permissionUtil');
 const { getOrUploadS3File } = require('../utils/s3Util');
 
 // SUBMIT APPLICATION
@@ -214,34 +214,9 @@ exports.submitBrochureRequest = async (req, res) => {
 // GET ALL APPLICATIONS (with tenant & website isolation)
 exports.getAllApplications = async (req, res) => {
   try {
-    const { company, project, website } = req.query;
-    const hierarchyResult = getHierarchyFilter(req, res);
-    if (!hierarchyResult.success) return;
-    const filter = hierarchyResult.filter;
-
-    if (website && website !== 'all') {
-      const Website = require('../models/websiteModel');
-      const foundWeb = await Website.findOne({
-        $or: [
-          { slug: website.toLowerCase() },
-          ...(website.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: website }] : [])
-        ]
-      }).lean();
-      if (foundWeb) {
-        filter.websiteId = foundWeb._id;
-      }
-    }
-    
-    if (company && company !== 'all') {
-      const Company = require('../models/companyModel');
-      const foundComp = await Company.findOne({
-        $or: [
-          { slug: company.toLowerCase() },
-          ...(company.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: company }] : [])
-        ]
-      }).lean();
-      if (foundComp) filter.companyId = foundComp._id;
-    }
+    const filterRes = await resolveHierarchyAndScopeFilter(req, res);
+    if (!filterRes.success) return;
+    const filter = filterRes.filter;
     
     const applications = await Career.find(filter)
       .populate('companyId', 'name slug')
@@ -249,7 +224,7 @@ exports.getAllApplications = async (req, res) => {
       .sort({ appliedAt: -1 })
       .lean();
 
-    res.json({ success: true, applications });
+    res.json({ success: true, count: applications.length, applications });
   } catch (error) {
     console.error("Fetch error:", error);
     res.status(500).json({ success: false, message: "Server error fetching applications" });

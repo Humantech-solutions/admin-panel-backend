@@ -90,16 +90,19 @@ exports.getAllChatQueries = async (req, res) => {
     if (!hierarchyResult.success) return;
     const filter = hierarchyResult.filter;
 
-    if (website && website !== 'all') {
+    const targetWebsite = website || project;
+    if (targetWebsite && targetWebsite !== 'all') {
       const Website = require('../models/websiteModel');
       const foundWeb = await Website.findOne({
         $or: [
-          { slug: website.toLowerCase() },
-          ...(website.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: website }] : [])
+          { slug: targetWebsite.toLowerCase() },
+          ...(targetWebsite.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: targetWebsite }] : [])
         ]
       }).lean();
       if (foundWeb) {
         filter.websiteId = foundWeb._id;
+      } else {
+        filter.websiteId = new (require('mongoose').Types.ObjectId)();
       }
     }
 
@@ -111,7 +114,11 @@ exports.getAllChatQueries = async (req, res) => {
           ...(company.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: company }] : [])
         ]
       }).lean();
-      if (foundComp) filter.companyId = foundComp._id;
+      if (foundComp) {
+        filter.companyId = foundComp._id;
+      } else {
+        filter.companyId = new (require('mongoose').Types.ObjectId)();
+      }
     }
 
     const queries = await ChatQuery.find(filter)
@@ -120,7 +127,7 @@ exports.getAllChatQueries = async (req, res) => {
       .sort({ submittedAt: -1 })
       .lean();
 
-    res.json({ success: true, queries });
+    res.json({ success: true, count: queries.length, queries });
   } catch (error) {
     console.error('Fetch error:', error);
     res.status(500).json({ success: false, message: 'Server error fetching queries.' });

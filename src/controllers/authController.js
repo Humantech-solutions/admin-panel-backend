@@ -452,6 +452,10 @@ exports.setupCompany = async (req, res) => {
   try {
     const {
       companyName,
+      title,
+      siteTitle,
+      siteName,
+      websiteTitle,
       siteUrl,
       adminEmail,
       fromEmailName,
@@ -502,14 +506,17 @@ exports.setupCompany = async (req, res) => {
       isActive: true,
     });
 
-    // Create Website if URL provided
+    // Create Website if URL or title provided
     let website = null;
-    if (siteUrl && siteUrl.trim()) {
-      const websiteSlug = await resolveUniqueSlug(companyName, Website);
+    const finalSiteTitle = (siteTitle || title || websiteTitle || siteName || '').trim();
+    if ((siteUrl && siteUrl.trim()) || finalSiteTitle) {
+      const siteDisplayName = finalSiteTitle || companyName.trim();
+      const websiteSlug = await resolveUniqueSlug(siteDisplayName, Website);
       website = await Website.create({
-        name: `${companyName.trim()} Main Site`,
+        name: siteDisplayName,
+        title: finalSiteTitle || siteDisplayName,
         slug: websiteSlug,
-        url: siteUrl.trim(),
+        url: siteUrl ? siteUrl.trim() : '',
         companyId: company._id,
         smtpConfig: smtpPayload,
         isActive: true,

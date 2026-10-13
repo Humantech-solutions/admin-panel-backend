@@ -2,7 +2,7 @@ const path = require('path');
 const SalesMail = require('../models/salesMailModel');
 const { sendEmail } = require('../utils/emailUtil');
 const { resolveCompanyAndWebsite } = require('../utils/resolverUtil');
-const { getHierarchyFilter } = require('../utils/permissionUtil');
+const { resolveHierarchyAndScopeFilter } = require('../utils/permissionUtil');
 const { getOrUploadS3File } = require('../utils/s3Util');
 
 // SUBMIT SALES BROCHURE REQUEST
@@ -97,23 +97,9 @@ exports.submitSalesBrochure = async (req, res) => {
 // GET ALL SALES MAILS (with tenant & website isolation)
 exports.getAllSalesMails = async (req, res) => {
   try {
-    const { company, project, website } = req.query;
-    const hierarchyResult = getHierarchyFilter(req, res);
-    if (!hierarchyResult.success) return;
-    const filter = hierarchyResult.filter;
-
-    if (website && website !== 'all') {
-      const Website = require('../models/websiteModel');
-      const foundWeb = await Website.findOne({
-        $or: [
-          { slug: website.toLowerCase() },
-          ...(website.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: website }] : [])
-        ]
-      }).lean();
-      if (foundWeb) {
-        filter.websiteId = foundWeb._id;
-      }
-    }
+    const filterRes = await resolveHierarchyAndScopeFilter(req, res);
+    if (!filterRes.success) return;
+    const filter = filterRes.filter;
 
     const mails = await SalesMail.find(filter)
       .populate('companyId', 'name slug')
@@ -121,7 +107,7 @@ exports.getAllSalesMails = async (req, res) => {
       .sort({ requestedAt: -1 })
       .lean();
 
-    res.json({ success: true, mails });
+    res.json({ success: true, count: mails.length, mails });
   } catch (error) {
     console.error("Fetch error:", error);
     res.status(500).json({ success: false, message: "Server error fetching sales mails" });

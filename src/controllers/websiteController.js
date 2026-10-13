@@ -1,6 +1,17 @@
 const Website = require('../models/websiteModel');
 const Company = require('../models/companyModel');
 
+// ── helper: canonical URL normalizer ─────────────────────────────────────────
+function getCanonicalUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  return rawUrl
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/+$/, '');
+}
+
 // ── helper: generate unique slug ─────────────────────────────────────────────
 async function resolveUniqueSlug(base) {
   const slugBase = base
@@ -56,7 +67,16 @@ exports.getAllWebsites = async (req, res) => {
 exports.getActiveWebsitesByCompany = async (req, res) => {
   try {
     const { companyId } = req.params;
-    const websites = await Website.find({ companyId, isActive: true }).sort({ name: 1 }).lean();
+    let targetCompanyId = companyId;
+
+    if (!companyId.match(/^[0-9a-fA-F]{24}$/)) {
+      const company = await Company.findOne({ slug: companyId.toLowerCase() });
+      if (company) {
+        targetCompanyId = company._id;
+      }
+    }
+
+    const websites = await Website.find({ companyId: targetCompanyId, isActive: true }).sort({ name: 1 }).lean();
     res.json({ success: true, count: websites.length, websites });
   } catch (error) {
     console.error('Error fetching active websites:', error);
@@ -92,11 +112,19 @@ exports.getWebsiteByIdOrSlug = async (req, res) => {
 // CREATE NEW WEBSITE
 exports.createWebsite = async (req, res) => {
   try {
-    const { name, slug, url, companyId, isActive, smtpConfig } = req.body;
+    const { name, title, websiteTitle, siteTitle, slug, url, companyId, isActive, smtpConfig } = req.body;
     let rawCompanyId = companyId || req.params.companyId;
 
-    if (!name || !rawCompanyId) {
-      return res.status(400).json({ success: false, message: 'Website name and companyId are required' });
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, field: 'name', message: 'Website name is required' });
+    }
+
+    if (!rawCompanyId) {
+      return res.status(400).json({ success: false, message: 'Company ID is required' });
+    }
+
+    if (!url || !url.trim()) {
+      return res.status(400).json({ success: false, field: 'url', message: 'Website URL is required' });
     }
 
     // Verify company exists (by ID or slug)
@@ -111,12 +139,43 @@ exports.createWebsite = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Parent company not found' });
     }
 
+    const existingWebsites = await Website.find({ companyId: company._id }).lean();
+
+    // Check duplicate website name for the same company
+    const duplicateName = existingWebsites.find(
+      (w) => w.name && w.name.trim().toLowerCase() === name.trim().toLowerCase()
+    );
+    if (duplicateName) {
+      return res.status(400).json({
+        success: false,
+        field: 'name',
+        message: 'Website name exists'
+      });
+    }
+
+    // Ensure 2 websites do not have the same website URL for the same company
+    const incomingCanonical = getCanonicalUrl(url);
+    const duplicateUrl = existingWebsites.find(
+      (w) => w.url && getCanonicalUrl(w.url) === incomingCanonical
+    );
+
+    if (duplicateUrl) {
+      return res.status(400).json({
+        success: false,
+        field: 'url',
+        message: 'Website URL exists'
+      });
+    }
+
     const resolvedSlug = await resolveUniqueSlug(slug || name);
 
+    const finalTitle = (title || websiteTitle || siteTitle || name || '').trim();
+
     const newWebsite = new Website({
-      name,
+      name: name.trim(),
+      title: finalTitle,
       slug: resolvedSlug,
-      url,
+      url: url.trim(),
       companyId: company._id,
       isActive: isActive !== undefined ? isActive : true,
       ...(smtpConfig && { smtpConfig })
@@ -135,16 +194,60 @@ exports.createWebsite = async (req, res) => {
 exports.updateWebsite = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, slug, url, isActive } = req.body;
+    const { name, title, websiteTitle, siteTitle, slug, url, isActive } = req.body;
 
     const website = await Website.findById(id);
     if (!website) {
       return res.status(404).json({ success: false, message: 'Website not found' });
     }
 
-    if (name) website.name = name;
-    if (url !== undefined) website.url = url;
+    const existingWebsites = await Website.find({
+      companyId: website.companyId,
+      _id: { $ne: website._id }
+    }).lean();
+
+    // Check duplicate website name for the same company
+    if (name) {
+      const duplicateName = existingWebsites.find(
+        (w) => w.name && w.name.trim().toLowerCase() === name.trim().toLowerCase()
+      );
+
+      if (duplicateName) {
+        return res.status(400).json({
+          success: false,
+          field: 'name',
+          message: 'Website name exists'
+        });
+      }
+      website.name = name.trim();
+    }
+
+    const incomingTitle = title !== undefined ? title : (websiteTitle !== undefined ? websiteTitle : siteTitle);
+    if (incomingTitle !== undefined) {
+      website.title = incomingTitle ? incomingTitle.trim() : '';
+    }
+
     if (isActive !== undefined) website.isActive = isActive;
+
+    // Check duplicate website URL for the same company
+    if (url !== undefined) {
+      if (!url.trim()) {
+        return res.status(400).json({ success: false, field: 'url', message: 'Website URL cannot be empty' });
+      }
+      const incomingCanonical = getCanonicalUrl(url);
+      const duplicateUrl = existingWebsites.find(
+        (w) => w.url && getCanonicalUrl(w.url) === incomingCanonical
+      );
+
+      if (duplicateUrl) {
+        return res.status(400).json({
+          success: false,
+          field: 'url',
+          message: 'Website URL exists'
+        });
+      }
+      website.url = url.trim();
+    }
 
     // Handle slug change with conflict check
     if (slug && slug.toLowerCase() !== website.slug) {
