@@ -1,10 +1,8 @@
-const path = require('path');
 const Career = require('../models/careerModel');
 const Company = require('../models/companyModel');
 const { sendEmail } = require('../utils/emailUtil');
 const { resolveCompanyAndWebsite } = require('../utils/resolverUtil');
-const { getHierarchyFilter } = require('../utils/permissionUtil');
-const { getOrUploadS3File } = require('../utils/s3Util');
+const { resolveHierarchyAndScopeFilter } = require('../utils/permissionUtil');
 
 // SUBMIT APPLICATION
 exports.submitApplication = async (req, res) => {
@@ -92,8 +90,8 @@ exports.submitApplication = async (req, res) => {
     });
 
     // 2. Trigger automated notification email to admin
-    const adminUrl = process.env.ADMIN_URL || 'http://localhost:3000';
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8001';
+    const adminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.in';
+    const backendUrl = process.env.BACKEND_URL || 'https://apis.admin.hutechsolutions.in';
     const adminLink = `${adminUrl}/admin/dashboard/career?project=${resolvedProject}`;
     const resumeDownloadLink = `${backendUrl}${resumePath}`;
     
@@ -180,10 +178,10 @@ exports.submitBrochureRequest = async (req, res) => {
     const brochureLink = (envBrochure && (envBrochure.startsWith('http') && (envBrochure.includes('.pdf') || envBrochure.includes('.doc'))))
       ? envBrochure
       : resolvedProject === 'hutech' 
-      ? `${envBrochure || 'http://localhost:3002'}/Hutech_Careers_Brochure.pdf` 
+      ? `${envBrochure || 'https://admin.hutechsolutions.in'}/Hutech_Careers_Brochure.pdf` 
       : resolvedProject === 'hulabs'
-      ? `${envBrochure || 'http://localhost:3002'}/Hulabs_Careers_Brochure.pdf`
-      : `${envBrochure || 'http://localhost:3002'}/Nabhira_Careers_Brochure.pdf`; 
+      ? `${envBrochure || 'https://admin.hutechsolutions.in'}/Hulabs_Careers_Brochure.pdf`
+      : `${envBrochure || 'https://admin.hutechsolutions.in'}/Nabhira_Careers_Brochure.pdf`; 
 
     await sendEmail({
       to: email,
@@ -214,34 +212,9 @@ exports.submitBrochureRequest = async (req, res) => {
 // GET ALL APPLICATIONS (with tenant & website isolation)
 exports.getAllApplications = async (req, res) => {
   try {
-    const { company, project, website } = req.query;
-    const hierarchyResult = getHierarchyFilter(req, res);
-    if (!hierarchyResult.success) return;
-    const filter = hierarchyResult.filter;
-
-    if (website && website !== 'all') {
-      const Website = require('../models/websiteModel');
-      const foundWeb = await Website.findOne({
-        $or: [
-          { slug: website.toLowerCase() },
-          ...(website.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: website }] : [])
-        ]
-      }).lean();
-      if (foundWeb) {
-        filter.websiteId = foundWeb._id;
-      }
-    }
-    
-    if (company && company !== 'all') {
-      const Company = require('../models/companyModel');
-      const foundComp = await Company.findOne({
-        $or: [
-          { slug: company.toLowerCase() },
-          ...(company.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: company }] : [])
-        ]
-      }).lean();
-      if (foundComp) filter.companyId = foundComp._id;
-    }
+    const filterRes = await resolveHierarchyAndScopeFilter(req, res);
+    if (!filterRes.success) return;
+    const filter = filterRes.filter;
     
     const applications = await Career.find(filter)
       .populate('companyId', 'name slug')
@@ -249,7 +222,7 @@ exports.getAllApplications = async (req, res) => {
       .sort({ appliedAt: -1 })
       .lean();
 
-    res.json({ success: true, applications });
+    res.json({ success: true, count: applications.length, applications });
   } catch (error) {
     console.error("Fetch error:", error);
     res.status(500).json({ success: false, message: "Server error fetching applications" });

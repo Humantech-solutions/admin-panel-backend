@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { sendEmail } = require('../utils/emailUtil');
 const { encrypt } = require('../utils/cryptoUtil');
+const { generateEmbedDetails } = require('../utils/embedUtil');
 
 // ── helper: sanitize company output (mask SMTP passwords) ────────────────────
 function sanitizeCompany(company) {
@@ -213,7 +214,17 @@ exports.createCompany = async (req, res) => {
 
               <p style="color: #64748b; font-size: 14px; margin-bottom: 24px;">Upon first login, you will set up 2FA and be prompted to update your password.</p>
 
-              <a href="http://localhost:3000/login" style="display: inline-block; background: #f99d1c; color: white; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 14px;">Login to Admin Portal</a>
+              <div style="background: #0f172a; padding: 20px; border-radius: 12px; margin-bottom: 24px;">
+                <p style="margin: 0 0 8px 0; color: #94a3b8; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Your Website Embed Code</p>
+                <pre style="margin: 0; color: #38bdf8; font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all;">&lt;script src="${process.env.BACKEND_URL || 'https://apis.admin.hutechsolutions.in'}/crm-embed.js" data-website="${autoWebsite ? autoWebsite.slug : resolvedSlug}" async&gt;&lt;/script&gt;</pre>
+              </div>
+
+              <p style="color: #64748b; font-size: 13px; margin-bottom: 24px;">
+                Paste this snippet right before the closing &lt;/body&gt; tag on your website to start capturing leads automatically.
+                <a href="${process.env.ADMIN_URL || 'https://admin.hutechsolutions.in'}/docs" style="color: #f99d1c; font-weight: bold; text-decoration: none;">View Installation Guide &rarr;</a>
+              </p>
+
+              <a href="https://admin.hutechsolutions.in/login" style="display: inline-block; background: #f99d1c; color: white; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 14px;">Login to Admin Portal</a>
             </div>
           `
         });
@@ -222,12 +233,16 @@ exports.createCompany = async (req, res) => {
       }
     }
 
+    const targetSlug = autoWebsite ? autoWebsite.slug : resolvedSlug;
+    const embed = generateEmbedDetails(targetSlug, req);
+
     res.status(201).json({
       success: true,
       message: 'Company created successfully',
       company: newCompany,
       ...(autoWebsite && { website: autoWebsite }),
       ...(tempPassword && { tempPassword }),
+      embed,
     });
   } catch (error) {
     console.error('Error creating company:', error);

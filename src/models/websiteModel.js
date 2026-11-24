@@ -6,6 +6,11 @@ const websiteSchema = new mongoose.Schema({
     required: [true, 'Website name is required'],
     trim: true,
   },
+  title: {
+    type: String,
+    trim: true,
+    default: '',
+  },
   // slug acts as the short prefix-code identifier, e.g. "nabhira", "hutech"
   slug: {
     type: String,

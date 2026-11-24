@@ -73,7 +73,7 @@ exports.createUser = async (req, res) => {
 
     await newUser.save();
     
-    const loginUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/login`;
+    const loginUrl = `${process.env.FRONTEND_URL || 'https://admin.hutechsolutions.in'}/login`;
     const html = `
       <h2>You have been invited!</h2>
       <p>Hello ${name},</p>

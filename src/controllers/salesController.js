@@ -1,9 +1,7 @@
-const path = require('path');
 const SalesMail = require('../models/salesMailModel');
 const { sendEmail } = require('../utils/emailUtil');
 const { resolveCompanyAndWebsite } = require('../utils/resolverUtil');
-const { getHierarchyFilter } = require('../utils/permissionUtil');
-const { getOrUploadS3File } = require('../utils/s3Util');
+const { resolveHierarchyAndScopeFilter } = require('../utils/permissionUtil');
 
 // SUBMIT SALES BROCHURE REQUEST
 exports.submitSalesBrochure = async (req, res) => {
@@ -27,7 +25,7 @@ exports.submitSalesBrochure = async (req, res) => {
     const envBrochure = process.env.SALES_BROCHURE_URL || process.env.BROCHURE_URL;
     const brochureLink = (envBrochure && (envBrochure.startsWith('http') && (envBrochure.includes('.pdf') || envBrochure.includes('.doc'))))
       ? envBrochure
-      : `${envBrochure || 'http://localhost:3002'}/hutech_solutions_brochure.pdf`;
+      : `${envBrochure || 'https://admin.hutechsolutions.in'}/hutech_solutions_brochure.pdf`;
     await sendEmail({
       to: email,
       fromName: `${resolved.fromEmailName} Sales`,
@@ -48,7 +46,7 @@ exports.submitSalesBrochure = async (req, res) => {
     });
 
     // 2. Trigger automated notification email to Admin
-    const adminUrl = process.env.ADMIN_URL || 'http://localhost:3000';
+    const adminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.in';
     const adminLink = `${adminUrl}/admin/dashboard/sales`;
     await sendEmail({
       to: resolved.salesNotificationEmail,
@@ -97,23 +95,9 @@ exports.submitSalesBrochure = async (req, res) => {
 // GET ALL SALES MAILS (with tenant & website isolation)
 exports.getAllSalesMails = async (req, res) => {
   try {
-    const { company, project, website } = req.query;
-    const hierarchyResult = getHierarchyFilter(req, res);
-    if (!hierarchyResult.success) return;
-    const filter = hierarchyResult.filter;
-
-    if (website && website !== 'all') {
-      const Website = require('../models/websiteModel');
-      const foundWeb = await Website.findOne({
-        $or: [
-          { slug: website.toLowerCase() },
-          ...(website.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: website }] : [])
-        ]
-      }).lean();
-      if (foundWeb) {
-        filter.websiteId = foundWeb._id;
-      }
-    }
+    const filterRes = await resolveHierarchyAndScopeFilter(req, res);
+    if (!filterRes.success) return;
+    const filter = filterRes.filter;
 
     const mails = await SalesMail.find(filter)
       .populate('companyId', 'name slug')
@@ -121,7 +105,7 @@ exports.getAllSalesMails = async (req, res) => {
       .sort({ requestedAt: -1 })
       .lean();
 
-    res.json({ success: true, mails });
+    res.json({ success: true, count: mails.length, mails });
   } catch (error) {
     console.error("Fetch error:", error);
     res.status(500).json({ success: false, message: "Server error fetching sales mails" });

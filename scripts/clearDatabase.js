@@ -13,7 +13,7 @@ const seedDefaults = require('../src/utils/seeder');
 
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const mongoURI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/adminpanel_crm';
+const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/sahajCRM';
 
 async function clearAndResetDatabase() {
   try {

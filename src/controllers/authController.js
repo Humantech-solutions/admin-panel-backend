@@ -5,6 +5,7 @@ const otplib = require('otplib');
 const qrcode = require('qrcode');
 const { sendEmail } = require('../utils/emailUtil');
 const { encrypt } = require('../utils/cryptoUtil');
+const { generateEmbedDetails } = require('../utils/embedUtil');
 
 const SECRET = process.env.JWT_SECRET || "mysecretkey";
 const MFA_SECRET = process.env.MFA_JWT_SECRET || "mfatempsecretkey";
@@ -83,8 +84,7 @@ exports.login = async (req, res) => {
       return res.status(400).json({ success: false, message: "Incorrect Email ID or Password" });
     }
 
-      
-      const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ success: false, message: "Incorrect Email ID or Password" });
     }
@@ -101,8 +101,6 @@ exports.login = async (req, res) => {
         mfaToken
       });
     }
-
-    let qrCodeHtml = '';
 
     if (!user.mfaEnabled) {
       console.log("MFA setup required for user. Generating secret...");
@@ -450,7 +448,21 @@ exports.changePasswordTemp = async (req, res) => {
 // SETUP COMPANY & WEBSITE AFTER MFA
 exports.setupCompany = async (req, res) => {
   try {
-    const { companyName, siteUrl, adminEmail, fromEmailName, adminSmtp } = req.body;
+    const {
+      companyName,
+      title,
+      siteTitle,
+      siteName,
+      websiteTitle,
+      siteUrl,
+      adminEmail,
+      fromEmailName,
+      careersNotificationEmail,
+      salesNotificationEmail,
+      contactNotificationEmail,
+      adminSmtp
+    } = req.body;
+
     if (!companyName || !companyName.trim()) {
       return res.status(400).json({ success: false, message: "Company name is required." });
     }
@@ -461,7 +473,10 @@ exports.setupCompany = async (req, res) => {
     }
 
     const finalAdminEmail = adminEmail?.trim().toLowerCase() || user.email;
-    const finalFromEmailName = fromEmailName?.trim() || user.name;
+    const finalFromEmailName = fromEmailName?.trim() || companyName.trim();
+    const finalCareersEmail = careersNotificationEmail?.trim().toLowerCase() || finalAdminEmail;
+    const finalSalesEmail = salesNotificationEmail?.trim().toLowerCase() || finalAdminEmail;
+    const finalContactEmail = contactNotificationEmail?.trim().toLowerCase() || finalAdminEmail;
 
     // Build Smtp payload if provided
     let smtpPayload = undefined;
@@ -482,22 +497,34 @@ exports.setupCompany = async (req, res) => {
       slug: companySlug,
       adminEmail: finalAdminEmail,
       fromEmailName: finalFromEmailName,
+      careersNotificationEmail: finalCareersEmail,
+      salesNotificationEmail: finalSalesEmail,
+      contactNotificationEmail: finalContactEmail,
       adminSmtp: smtpPayload,
       isActive: true,
     });
 
-    // Create Website if URL provided
+    // Create Website if URL or title provided, or create default website for the company
     let website = null;
-    if (siteUrl && siteUrl.trim()) {
-      const websiteSlug = await resolveUniqueSlug(companyName, Website);
-      website = await Website.create({
-        name: `${companyName.trim()} Main Site`,
-        slug: websiteSlug,
-        url: siteUrl.trim(),
-        companyId: company._id,
-        isActive: true,
-      });
+    const finalSiteTitle = (siteTitle || title || websiteTitle || siteName || '').trim();
+    let siteDisplayName = finalSiteTitle;
+    if (!siteDisplayName && siteUrl) {
+      siteDisplayName = siteUrl.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0];
     }
+    if (!siteDisplayName) {
+      siteDisplayName = `${companyName.trim()} Website`;
+    }
+
+    const websiteSlug = await resolveUniqueSlug(siteDisplayName, Website);
+    website = await Website.create({
+      name: siteDisplayName,
+      title: finalSiteTitle || siteDisplayName,
+      slug: websiteSlug,
+      url: siteUrl ? siteUrl.trim() : '',
+      companyId: company._id,
+      smtpConfig: smtpPayload,
+      isActive: true,
+    });
 
     // Update User
     user.companyId = company._id;
@@ -515,12 +542,45 @@ exports.setupCompany = async (req, res) => {
       { expiresIn: '1d' }
     );
 
+    const embed = generateEmbedDetails(website.slug, req);
+
+    // Send Onboarding Welcome Email with Embed Snippet
+    if (finalAdminEmail) {
+      try {
+        await sendEmail({
+          to: finalAdminEmail,
+          fromName: `SahajCRM`,
+          smtpConfig: null,
+          subject: `Welcome to SahajCRM — ${company.name} Embed Code & Login`,
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 40px auto; padding: 40px; border: 1px solid #e0e0e0; border-radius: 16px; color: #11253e;">
+              <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 12px;">Organization Setup Complete</h2>
+              <p style="color: #64748b; font-size: 15px; margin-bottom: 24px;">Your organization portal for <strong>${company.name}</strong> is live.</p>
+
+              <div style="background: #0f172a; padding: 20px; border-radius: 12px; margin-bottom: 24px; color: #38bdf8; font-family: monospace; font-size: 13px;">
+                ${embed.embedCode.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+              </div>
+
+              <p style="color: #64748b; font-size: 13px; margin-bottom: 24px;">
+                Paste this script before the closing &lt;/body&gt; tag on your website to begin capturing leads automatically.
+                <br/><br/>
+                <a href="${embed.installationInstructions.documentationUrl}?slug=${website.slug}" style="color: #f99d1c; font-weight: bold; text-decoration: none;">View Complete Installation Guide &rarr;</a>
+              </p>
+            </div>
+          `
+        });
+      } catch (emailErr) {
+        console.warn("Welcome email notification warning:", emailErr.message);
+      }
+    }
+
     res.json({
       success: true,
       message: "Company setup complete",
       token,
       company,
       website,
+      embed,
       user: {
         _id: user._id,
         name: user.name,

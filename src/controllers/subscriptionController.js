@@ -1,6 +1,6 @@
 const Subscription = require('../models/subscriptionModel');
 const { resolveCompanyAndWebsite } = require('../utils/resolverUtil');
-const { getHierarchyFilter } = require('../utils/permissionUtil');
+const { resolveHierarchyAndScopeFilter } = require('../utils/permissionUtil');
 
 exports.subscribe = async (req, res) => {
   try {
@@ -95,17 +95,22 @@ exports.getSubscriptions = async (req, res) => {
     if (!hierarchyResult.success) return;
     const filter = hierarchyResult.filter;
 
-    const { company, website } = req.query;
+    const { company, project, website } = req.query;
 
-    if (website && website !== 'all') {
+    const targetWebsite = website || project;
+    if (targetWebsite && targetWebsite !== 'all') {
       const Website = require('../models/websiteModel');
       const foundWeb = await Website.findOne({
         $or: [
-          { slug: website.toLowerCase() },
-          ...(website.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: website }] : [])
+          { slug: targetWebsite.toLowerCase() },
+          ...(targetWebsite.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: targetWebsite }] : [])
         ]
       }).lean();
-      if (foundWeb) filter.websiteId = foundWeb._id;
+      if (foundWeb) {
+        filter.websiteId = foundWeb._id;
+      } else {
+        filter.websiteId = new (require('mongoose').Types.ObjectId)();
+      }
     }
 
     if (company && company !== 'all') {
@@ -116,7 +121,11 @@ exports.getSubscriptions = async (req, res) => {
           ...(company.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: company }] : [])
         ]
       }).lean();
-      if (foundComp) filter.companyId = foundComp._id;
+      if (foundComp) {
+        filter.companyId = foundComp._id;
+      } else {
+        filter.companyId = new (require('mongoose').Types.ObjectId)();
+      }
     }
 
     const subscriptions = await Subscription.find(filter)
