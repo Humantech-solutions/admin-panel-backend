@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const seedDefaults = require('../src/utils/seeder');
 require('dotenv').config();
 
-const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/nabhiraAdmin_db';
+const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/sahajCRM';
 
 async function run() {
   try {

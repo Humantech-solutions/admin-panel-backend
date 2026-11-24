@@ -1,10 +1,8 @@
-const path = require('path');
 const Career = require('../models/careerModel');
 const Company = require('../models/companyModel');
 const { sendEmail } = require('../utils/emailUtil');
 const { resolveCompanyAndWebsite } = require('../utils/resolverUtil');
 const { resolveHierarchyAndScopeFilter } = require('../utils/permissionUtil');
-const { getOrUploadS3File } = require('../utils/s3Util');
 
 // SUBMIT APPLICATION
 exports.submitApplication = async (req, res) => {
@@ -92,8 +90,8 @@ exports.submitApplication = async (req, res) => {
     });
 
     // 2. Trigger automated notification email to admin
-    const adminUrl = process.env.ADMIN_URL || 'http://localhost:3000';
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8001';
+    const adminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.in';
+    const backendUrl = process.env.BACKEND_URL || 'https://apis.admin.hutechsolutions.in';
     const adminLink = `${adminUrl}/admin/dashboard/career?project=${resolvedProject}`;
     const resumeDownloadLink = `${backendUrl}${resumePath}`;
     
@@ -180,10 +178,10 @@ exports.submitBrochureRequest = async (req, res) => {
     const brochureLink = (envBrochure && (envBrochure.startsWith('http') && (envBrochure.includes('.pdf') || envBrochure.includes('.doc'))))
       ? envBrochure
       : resolvedProject === 'hutech' 
-      ? `${envBrochure || 'http://localhost:3002'}/Hutech_Careers_Brochure.pdf` 
+      ? `${envBrochure || 'https://admin.hutechsolutions.in'}/Hutech_Careers_Brochure.pdf` 
       : resolvedProject === 'hulabs'
-      ? `${envBrochure || 'http://localhost:3002'}/Hulabs_Careers_Brochure.pdf`
-      : `${envBrochure || 'http://localhost:3002'}/Nabhira_Careers_Brochure.pdf`; 
+      ? `${envBrochure || 'https://admin.hutechsolutions.in'}/Hulabs_Careers_Brochure.pdf`
+      : `${envBrochure || 'https://admin.hutechsolutions.in'}/Nabhira_Careers_Brochure.pdf`; 
 
     await sendEmail({
       to: email,

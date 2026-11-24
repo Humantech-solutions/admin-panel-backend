@@ -1,4 +1,5 @@
 const Contact = require('../models/contactModel');
+const Career = require('../models/careerModel');
 const { sendEmail } = require('../utils/emailUtil');
 const { resolveCompanyAndWebsite } = require('../utils/resolverUtil');
 const { resolveHierarchyAndScopeFilter } = require('../utils/permissionUtil');
@@ -71,7 +72,7 @@ exports.submitContact = async (req, res) => {
     });
 
     // 2. Trigger automated notification email to admin
-    const adminUrl = process.env.ADMIN_URL || 'http://localhost:3000';
+    const adminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.in';
     const adminLink = `${adminUrl}/admin/dashboard/contact-form?project=${resolvedProject}${category ? `&category=${encodeURIComponent(category)}` : ""}`;
     
     await sendEmail({
@@ -148,13 +149,48 @@ exports.getAllContacts = async (req, res) => {
 
     if (category) filter.category = new RegExp(`^${category}$`, 'i');
 
-    
-    
-    const contacts = await Contact.find(filter)
+    let contacts = await Contact.find(filter)
       .populate('companyId', 'name slug')
       .populate('websiteId', 'name slug url')
       .sort({ submittedAt: -1 })
       .lean();
+
+    // If category is Career and no standard contacts exist, include career applications so users see candidate records
+    if ((!contacts || contacts.length === 0) && category && category.toLowerCase() === 'career') {
+      try {
+        const Career = require('../models/careerModel');
+        const careerFilterRes = await resolveHierarchyAndScopeFilter(req, res);
+        if (careerFilterRes.success) {
+          const apps = await Career.find(careerFilterRes.filter)
+            .populate('companyId', 'name slug')
+            .populate('websiteId', 'name slug url')
+            .sort({ appliedAt: -1 })
+            .lean();
+
+          if (apps && apps.length > 0) {
+            contacts = apps.map(app => ({
+              _id: app._id,
+              name: app.name,
+              email: app.email,
+              phone: app.phone || app.linkedin,
+              subject: 'Job Application: ' + (app.pageTitle || 'Careers'),
+              message: app.resume ? 'Resume: ' + app.resume : 'Applied via careers page.',
+              pageTitle: app.pageTitle,
+              pageUrl: app.pageUrl,
+              category: 'Career',
+              status: 'New',
+              submittedAt: app.appliedAt || app.createdAt,
+              createdAt: app.createdAt,
+              companyId: app.companyId,
+              websiteId: app.websiteId,
+              resume: app.resume
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn('Career fallback error:', err.message);
+      }
+    }
 
     res.json({ success: true, contacts });
   } catch (error) {

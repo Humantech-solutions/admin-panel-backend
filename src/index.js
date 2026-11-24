@@ -52,6 +52,14 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use(express.static(path.join(__dirname, '../public')));
+
+// Public CRM Embed Script
+app.get('/crm-embed.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.sendFile(path.join(__dirname, '../public/crm-embed.js'));
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -68,24 +76,55 @@ app.use('/api/document', documentRequestRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 
+// Root API Health Check
 app.get('/', (req, res) => {
-  res.send('API running 🚀');
+  const adminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.in';
+  res.json({
+    status: 'ok',
+    service: 'SahajCRM Backend API 🚀',
+    docs: `${adminUrl}/docs`
+  });
 });
 
-// Database connection
-const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/sahajCRM';
-mongoose.connect(mongoURI, {
-  serverSelectionTimeoutMS: 5000 // Fail fast if MongoDB is unreachable
-})
-  .then(async () => {
-    console.log('✅ MongoDB connected successfully');
+// Documentation Route — Redirect to Next.js Documentation
+app.get('/docs', (req, res) => {
+  const adminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.in';
+  res.redirect(`${adminUrl}/docs`);
+});
+
+// Database connection with automatic local fallback
+const primaryMongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/sahajCRM';
+const fallbackMongoURI = process.env.LOCAL_MONGODB_URI || 'mongodb://localhost:27017/sahajCRM';
+
+async function connectDatabase() {
+  try {
+    await mongoose.connect(primaryMongoURI, {
+      serverSelectionTimeoutMS: 4000
+    });
+    console.log(`✅ MongoDB connected successfully`);
     await seedDefaults();
     const { startPolling } = require('./utils/blogPollingService');
     startPolling();
-  })
-  .catch(err => {
-    console.error('❌ MongoDB connection error:', err);
-  });
+  } catch (err) {
+    console.error('❌ MongoDB primary connection error:', err.message);
+    if (primaryMongoURI !== fallbackMongoURI) {
+      console.log('🔄 Attempting fallback connection to local MongoDB:', fallbackMongoURI);
+      try {
+        await mongoose.connect(fallbackMongoURI, {
+          serverSelectionTimeoutMS: 4000
+        });
+        console.log('✅ MongoDB connected successfully to fallback local database (sahajCRM)');
+        await seedDefaults();
+        const { startPolling } = require('./utils/blogPollingService');
+        startPolling();
+      } catch (fallbackErr) {
+        console.error('❌ MongoDB fallback connection error:', fallbackErr.message);
+      }
+    }
+  }
+}
+
+connectDatabase();
 
 const PORT = process.env.PORT || 8001;
 app.listen(PORT, () => {

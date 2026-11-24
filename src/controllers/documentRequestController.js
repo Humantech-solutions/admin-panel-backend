@@ -1,6 +1,5 @@
 const path = require('path');
 const DocumentRequest = require('../models/documentRequestModel');
-const Company = require('../models/companyModel');
 const { sendEmail } = require('../utils/emailUtil');
 const { resolveCompanyAndWebsite } = require('../utils/resolverUtil');
 const { getOrUploadS3File } = require('../utils/s3Util');
@@ -46,7 +45,7 @@ exports.submitDocumentRequest = async (req, res) => {
         console.warn('⚠️ S3 check/upload warning:', s3Err.message);
       }
 
-      downloadUrl = s3Url || `${process.env.BACKEND_URL || 'http://localhost:8001'}${document}`;
+      downloadUrl = s3Url || `${process.env.BACKEND_URL || 'https://apis.admin.hutechsolutions.in'}${document}`;
     }
 
     const newRequest = new DocumentRequest({
@@ -116,7 +115,7 @@ exports.submitDocumentRequest = async (req, res) => {
     });
 
     // 2. Dispatch alert notification email to Admin (company.adminEmail)
-    const adminUrl = process.env.ADMIN_URL || 'http://localhost:3000';
+    const adminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.in';
     const adminLink = `${adminUrl}/admin/dashboard/document-requests?project=${resolvedProject}`;
 
     await sendEmail({

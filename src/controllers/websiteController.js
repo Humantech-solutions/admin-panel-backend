@@ -1,5 +1,6 @@
 const Website = require('../models/websiteModel');
 const Company = require('../models/companyModel');
+const { generateEmbedDetails } = require('../utils/embedUtil');
 
 // ── helper: canonical URL normalizer ─────────────────────────────────────────
 function getCanonicalUrl(rawUrl) {
@@ -102,7 +103,8 @@ exports.getWebsiteByIdOrSlug = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Website not found' });
     }
 
-    res.json({ success: true, website });
+    const embed = generateEmbedDetails(website.slug, req);
+    res.json({ success: true, website, embed });
   } catch (error) {
     console.error('Error fetching website:', error);
     res.status(500).json({ success: false, message: 'Server error fetching website' });
@@ -183,7 +185,14 @@ exports.createWebsite = async (req, res) => {
 
     await newWebsite.save();
 
-    res.status(201).json({ success: true, message: 'Website created successfully', website: newWebsite });
+    const embed = generateEmbedDetails(resolvedSlug, req);
+
+    res.status(201).json({ 
+      success: true, 
+      message: 'Website created successfully', 
+      website: newWebsite,
+      embed
+    });
   } catch (error) {
     console.error('Error creating website:', error);
     res.status(500).json({ success: false, message: 'Server error during website creation', details: error.message });
@@ -279,5 +288,31 @@ exports.deleteWebsite = async (req, res) => {
   } catch (error) {
     console.error('Error deleting website:', error);
     res.status(500).json({ success: false, message: 'Server error during website deletion' });
+  }
+};
+
+// GET EMBED CODE & INSTALLATION INSTRUCTIONS FOR A SPECIFIC WEBSITE
+exports.getWebsiteEmbedCode = async (req, res) => {
+  try {
+    const { idOrSlug } = req.params;
+    let website;
+
+    if (idOrSlug.match(/^[0-9a-fA-F]{24}$/)) {
+      website = await Website.findById(idOrSlug).populate('companyId', 'name slug').lean();
+    } else {
+      website = await Website.findOne({ slug: idOrSlug.toLowerCase() })
+        .populate('companyId', 'name slug')
+        .lean();
+    }
+
+    if (!website) {
+      return res.status(404).json({ success: false, message: 'Website not found' });
+    }
+
+    const embed = generateEmbedDetails(website.slug, req);
+    res.json({ success: true, website, embed });
+  } catch (error) {
+    console.error('Error fetching embed code:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching embed code' });
   }
 };
