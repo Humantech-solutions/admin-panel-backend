@@ -1,6 +1,8 @@
 const User = require('../models/userModel');
+const Company = require('../models/companyModel');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const { sendEmail } = require('../utils/emailUtil');
 
 // Helper to determine if current user is super user
@@ -11,20 +13,33 @@ exports.getUsers = async (req, res) => {
   try {
     let query = {};
     if (isSuper(req.user.role)) {
-      query.companyId = null;
+      if (req.query.companyId && req.query.companyId !== 'all') {
+        if (mongoose.Types.ObjectId.isValid(req.query.companyId)) {
+          query.companyId = req.query.companyId;
+        } else {
+          const comp = await Company.findOne({ slug: req.query.companyId });
+          if (comp) query.companyId = comp._id;
+        }
+      } else if (req.query.all === 'true') {
+        // Return all users across platform
+      } else {
+        query.companyId = null;
+      }
     } else {
       query.companyId = req.user.companyId;
     }
+
     const users = await User.find(query).select('-password -mfaSecret');
     const usersWithStatus = users.map(u => {
       const userObj = u.toObject();
       if (!userObj.mfaEnabled && userObj.mustChangePassword) {
         userObj.status = 'invited';
       } else {
-        userObj.status = 'active';
+        userObj.status = userObj.status || 'active';
       }
       return userObj;
     });
+
     res.json({ success: true, users: usersWithStatus });
   } catch (error) {
     console.error("Fetch users error:", error);
@@ -35,7 +50,7 @@ exports.getUsers = async (req, res) => {
 // POST /api/users
 exports.createUser = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, companyId } = req.body;
     
     // Check if authorized
     if (req.user.role !== 'superadmin' && req.user.role !== 'company_admin') {
@@ -45,7 +60,7 @@ exports.createUser = async (req, res) => {
     // Validate role
     let validRoles = [];
     if (req.user.role === 'superadmin') {
-      validRoles = ['superadmin', 'super_editor', 'super_viewer'];
+      validRoles = ['superadmin', 'super_editor', 'super_viewer', 'company_admin', 'company_editor', 'company_viewer'];
     } else {
       validRoles = ['company_admin', 'company_editor', 'company_viewer'];
     }
@@ -54,19 +69,37 @@ exports.createUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid role for this context" });
     }
 
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const cleanEmail = email.toLowerCase().trim();
+    const existingUser = await User.findOne({ email: cleanEmail });
     if (existingUser) {
       return res.status(400).json({ success: false, message: "User already exists with this email" });
     }
 
-    const tempPassword = crypto.randomBytes(4).toString('hex');
+    // Resolve companyId: company_admin always assigns their own companyId; superadmin can pass companyId
+    let targetCompanyId = null;
+    if (role.startsWith('company_')) {
+      if (req.user.role === 'superadmin') {
+        if (companyId) {
+          if (mongoose.Types.ObjectId.isValid(companyId)) {
+            targetCompanyId = companyId;
+          } else {
+            const comp = await Company.findOne({ slug: companyId });
+            if (comp) targetCompanyId = comp._id;
+          }
+        }
+      } else {
+        targetCompanyId = req.user.companyId;
+      }
+    }
+
+    const tempPassword = password || crypto.randomBytes(4).toString('hex');
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
     const newUser = new User({
-      name,
-      email: email.toLowerCase(),
+      name: name.trim(),
+      email: cleanEmail,
       password: hashedPassword,
       role,
-      companyId: isSuper(req.user.role) ? null : req.user.companyId,
+      companyId: targetCompanyId,
       mfaEnabled: false,
       mustChangePassword: true, // Force password change on login
     });
@@ -77,12 +110,12 @@ exports.createUser = async (req, res) => {
     const html = `
       <h2>You have been invited!</h2>
       <p>Hello ${name},</p>
-      <p>You have been invited to join as a collaborator.</p>
+      <p>You have been invited to join as a team member.</p>
       <p>Your temporary password is: <strong>${tempPassword}</strong></p>
       <p>Please <a href="${loginUrl}">login here</a>. Upon your first login, you will be prompted to set up Google Authenticator and change your password.</p>
     `;
     await sendEmail({
-      to: email.toLowerCase(),
+      to: cleanEmail,
       subject: 'Invitation to Admin Panel',
       html,
     });
@@ -100,10 +133,11 @@ exports.createUser = async (req, res) => {
 // PUT /api/users/:id
 exports.updateUser = async (req, res) => {
   try {
-    const { role } = req.body;
+    const { name, email, role, status } = req.body;
     
+    // Check if authorized
     if (req.user.role !== 'superadmin' && req.user.role !== 'company_admin') {
-      return res.status(403).json({ success: false, message: "Not authorized to edit collaborators" });
+      return res.status(403).json({ success: false, message: "Not authorized to edit users" });
     }
 
     const userToEdit = await User.findById(req.params.id);
@@ -111,26 +145,98 @@ exports.updateUser = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    // Ensure they can only edit users in their scope
-    if (isSuper(req.user.role) && userToEdit.companyId !== null) {
-      return res.status(403).json({ success: false, message: "Cannot edit company user from super admin" });
-    }
-    if (!isSuper(req.user.role) && String(userToEdit.companyId) !== String(req.user.companyId)) {
-      return res.status(403).json({ success: false, message: "Cannot edit user from another company" });
-    }
-
-    let validRoles = isSuper(req.user.role) ? ['superadmin', 'super_editor', 'super_viewer'] : ['company_admin', 'company_editor', 'company_viewer'];
-    if (role && !validRoles.includes(role)) {
-      return res.status(400).json({ success: false, message: "Invalid role" });
+    // Tenant isolation:
+    // Superadmin has global privilege to manage any user.
+    // Company admin can only manage users within their own company.
+    if (!isSuper(req.user.role)) {
+      if (String(userToEdit.companyId) !== String(req.user.companyId)) {
+        return res.status(403).json({ success: false, message: "Cannot edit user from another company" });
+      }
     }
 
-    if (role) userToEdit.role = role;
+    // Validate and update role if provided
+    if (role) {
+      let validRoles = [];
+      if (req.user.role === 'superadmin') {
+        validRoles = ['superadmin', 'super_editor', 'super_viewer', 'company_admin', 'company_editor', 'company_viewer'];
+      } else {
+        validRoles = ['company_admin', 'company_editor', 'company_viewer'];
+      }
+
+      if (!validRoles.includes(role)) {
+        return res.status(400).json({ success: false, message: "Invalid role specified" });
+      }
+      userToEdit.role = role;
+    }
+
+    // Update full name if provided
+    if (name && typeof name === 'string' && name.trim()) {
+      userToEdit.name = name.trim();
+    }
+
+    // Update email if provided (with uniqueness check)
+    if (email && typeof email === 'string' && email.trim()) {
+      const cleanEmail = email.toLowerCase().trim();
+      if (cleanEmail !== userToEdit.email) {
+        const existing = await User.findOne({ email: cleanEmail, _id: { $ne: userToEdit._id } });
+        if (existing) {
+          return res.status(400).json({ success: false, message: "Another user already exists with this email address" });
+        }
+        userToEdit.email = cleanEmail;
+      }
+    }
+
+    // Update status if provided
+    if (status) {
+      userToEdit.status = status;
+    }
+
     await userToEdit.save();
 
-    res.json({ success: true, message: "Collaborator updated successfully" });
+    const userToReturn = userToEdit.toObject();
+    delete userToReturn.password;
+    delete userToReturn.mfaSecret;
+
+    res.json({ success: true, message: "User updated successfully", user: userToReturn });
   } catch (error) {
     console.error("Update user error:", error);
-    res.status(500).json({ success: false, message: "Server error updating collaborator" });
+    res.status(500).json({ success: false, message: "Server error updating user", details: error.message });
+  }
+};
+
+// PUT /api/users/:id/password
+exports.changeUserPassword = async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: "New password must be at least 6 characters long" });
+    }
+
+    if (req.user.role !== 'superadmin' && req.user.role !== 'company_admin') {
+      return res.status(403).json({ success: false, message: "Not authorized to reset passwords" });
+    }
+
+    const userToEdit = await User.findById(req.params.id);
+    if (!userToEdit) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // Tenant check
+    if (!isSuper(req.user.role)) {
+      if (String(userToEdit.companyId) !== String(req.user.companyId)) {
+        return res.status(403).json({ success: false, message: "Cannot edit user from another company" });
+      }
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    userToEdit.password = hashedPassword;
+    userToEdit.mustChangePassword = false;
+    await userToEdit.save();
+
+    res.json({ success: true, message: "Password updated successfully" });
+  } catch (error) {
+    console.error("Change user password error:", error);
+    res.status(500).json({ success: false, message: "Server error updating password" });
   }
 };
 
@@ -150,12 +256,11 @@ exports.deleteUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "Cannot delete yourself" });
     }
 
-    // Ensure they can only delete users in their scope
-    if (isSuper(req.user.role) && userToEdit.companyId !== null) {
-      return res.status(403).json({ success: false, message: "Cannot delete company user from super admin" });
-    }
-    if (!isSuper(req.user.role) && String(userToEdit.companyId) !== String(req.user.companyId)) {
-      return res.status(403).json({ success: false, message: "Cannot delete user from another company" });
+    // Ensure company admin can only delete users in their own company; superadmin can delete any
+    if (!isSuper(req.user.role)) {
+      if (String(userToEdit.companyId) !== String(req.user.companyId)) {
+        return res.status(403).json({ success: false, message: "Cannot delete user from another company" });
+      }
     }
 
     await User.findByIdAndDelete(req.params.id);

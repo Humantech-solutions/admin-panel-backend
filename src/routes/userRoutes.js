@@ -22,10 +22,11 @@ router.get('/profile', authMiddleware, async (req, res) => {
   }
 });
 
-// Collaborator routes
+// Collaborator & User management routes
 router.get('/', authMiddleware, userController.getUsers);
 router.post('/', authMiddleware, userController.createUser);
 router.put('/:id', authMiddleware, userController.updateUser);
+router.put('/:id/password', authMiddleware, userController.changeUserPassword);
 router.delete('/:id', authMiddleware, userController.deleteUser);
 
 module.exports = router;
