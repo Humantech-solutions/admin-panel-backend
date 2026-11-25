@@ -3,6 +3,8 @@ const Website = require('../models/websiteModel');
 const User = require('../models/userModel');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const otplib = require('otplib');
+const qrcode = require('qrcode');
 const { sendEmail } = require('../utils/emailUtil');
 const { encrypt } = require('../utils/cryptoUtil');
 const { generateEmbedDetails } = require('../utils/embedUtil');
@@ -185,48 +187,90 @@ exports.createCompany = async (req, res) => {
       tempPassword = `Pass#${crypto.randomBytes(4).toString('hex')}!`;
       const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
+      // Generate Google Authenticator secret & QR Code for the company admin
+      const mfaSecret = otplib.generateSecret();
+      const serviceName = process.env.MFA_SERVICE_NAME || `${name} Admin`;
+      const cleanEmail = adminEmail.toLowerCase().trim();
+      const otpauth = `otpauth://totp/${encodeURIComponent(serviceName)}:${encodeURIComponent(cleanEmail)}?secret=${mfaSecret}&issuer=${encodeURIComponent(serviceName)}`;
+      const qrCodeUrl = await qrcode.toDataURL(otpauth, { errorCorrectionLevel: 'H', margin: 4, width: 300 });
+
       adminUser = await User.create({
         name: fromEmailName || `${name} Admin`,
-        email: adminEmail.toLowerCase(),
+        email: cleanEmail,
         password: hashedPassword,
         role: 'company_admin',
         companyId: newCompany._id,
-        mfaEnabled: false,
+        mfaSecret,
+        mfaEnabled: true,
         mustChangePassword: true,
       });
 
-      // Email temporary credentials & login URL to company admin
+      // Email credentials & embedded Google Authenticator QR Code
+      const loginUrl = `${process.env.ADMIN_URL || 'https://admin.hutechsolutions.in'}/login`;
       try {
         await sendEmail({
-          to: adminEmail,
+          to: cleanEmail,
           fromName: `Hutech CRM`,
           smtpConfig: null, // Always sent via Platform/Superadmin SMTP engine
-          subject: `Welcome to Hutech CRM Admin Portal — Credentials & Login Link`,
+          subject: `Welcome to ${name} Admin Portal — Credentials & Google Authenticator Setup`,
           html: `
-            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 40px auto; padding: 40px; border: 1px solid #e0e0e0; border-radius: 16px; color: #11253e; box-shadow: 0 4px 24px rgba(0,0,0,0.05);">
-              <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 12px;">Organization Onboarded Successfully</h2>
-              <p style="color: #64748b; font-size: 15px; margin-bottom: 24px;">An organization portal for <strong>${name}</strong> has been provisioned.</p>
-
-              <div style="background: #f8fafc; padding: 24px; border-radius: 12px; margin-bottom: 24px;">
-                <p style="margin: 0 0 10px 0; font-size: 14px;"><strong>Login Email:</strong> ${adminEmail}</p>
-                <p style="margin: 0; font-size: 14px;"><strong>Temporary Password:</strong> <code style="font-size: 18px; color: #f99d1c; font-weight: bold;">${tempPassword}</code></p>
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 30px auto; padding: 0; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.06); color: #11253e;">
+              <div style="background: linear-gradient(135deg, #11253e 0%, #1a385c 100%); padding: 36px 32px; text-align: center; color: #ffffff;">
+                <h1 style="margin: 0; font-size: 24px; font-weight: 700;">Welcome to ${name}</h1>
+                <p style="margin: 8px 0 0 0; font-size: 14px; color: #94a3b8;">Company Admin Access &amp; Two-Factor Security Setup</p>
               </div>
 
-              <p style="color: #64748b; font-size: 14px; margin-bottom: 24px;">Upon first login, you will set up 2FA and be prompted to update your password.</p>
+              <div style="padding: 32px;">
+                <p style="font-size: 15px; line-height: 1.6; margin: 0 0 20px 0; color: #334155;">
+                  An organization portal for <strong>${name}</strong> has been provisioned. Below are your administrator credentials and your <strong>Google Authenticator QR Code</strong> to activate Two-Factor Authentication (2FA).
+                </p>
 
-              <div style="background: #0f172a; padding: 20px; border-radius: 12px; margin-bottom: 24px;">
-                <p style="margin: 0 0 8px 0; color: #94a3b8; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Your Website Embed Code</p>
-                <pre style="margin: 0; color: #38bdf8; font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all;">&lt;script src="${process.env.BACKEND_URL || 'https://apis.admin.hutechsolutions.in'}/crm-embed.js" data-website="${autoWebsite ? autoWebsite.slug : resolvedSlug}" async&gt;&lt;/script&gt;</pre>
+                <!-- Credentials Box -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px;">
+                  <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b;">Administrator Credentials</p>
+                  <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Login Email:</strong> <span style="color: #11253e;">${cleanEmail}</span></p>
+                  <p style="margin: 0; font-size: 14px;"><strong>Temporary Password:</strong> <code style="font-family: monospace; font-size: 16px; font-weight: bold; color: #f99d1c; background: #ffffff; padding: 3px 8px; border-radius: 6px; border: 1px solid #e2e8f0;">${tempPassword}</code></p>
+                </div>
+
+                <!-- Google Authenticator QR Scanner Box -->
+                <div style="background: #ffffff; border: 2px solid #f1f5f9; border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                  <div style="display: inline-block; background: #f99d1c; color: white; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 12px; border-radius: 20px; margin-bottom: 12px;">Step 1: Scan with Google Authenticator</div>
+                  <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #11253e;">Set Up Two-Factor Authentication</h3>
+                  <p style="margin: 0 0 18px 0; font-size: 13px; color: #64748b; line-height: 1.5;">
+                    Open the <strong>Google Authenticator</strong> app on your mobile device, tap <strong>+ (Add)</strong>, and scan the QR code:
+                  </p>
+                  
+                  <div style="display: inline-block; padding: 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 16px;">
+                    <img src="cid:qrcode" alt="Google Authenticator QR Code" width="220" height="220" style="display: block; border-radius: 8px;" />
+                  </div>
+
+                  <p style="margin: 0 0 8px 0; font-size: 12px; color: #64748b;">Manual Setup Key:</p>
+                  <div style="font-family: monospace; font-size: 18px; font-weight: 700; color: #11253e; background: #f8fafc; padding: 8px 16px; border: 1px dashed #cbd5e1; border-radius: 8px; display: inline-block; letter-spacing: 4px;">
+                    ${mfaSecret}
+                  </div>
+                </div>
+
+                <!-- Website Embed Code Snippet -->
+                <div style="background: #0f172a; padding: 20px; border-radius: 12px; margin-bottom: 24px;">
+                  <p style="margin: 0 0 8px 0; color: #94a3b8; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Your Website Embed Code</p>
+                  <pre style="margin: 0; color: #38bdf8; font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all;">&lt;script src="${process.env.BACKEND_URL || 'https://apis.admin.hutechsolutions.in'}/crm-embed.js" data-website="${autoWebsite ? autoWebsite.slug : resolvedSlug}" async&gt;&lt;/script&gt;</pre>
+                </div>
+
+                <!-- CTA -->
+                <div style="text-align: center; margin-bottom: 16px;">
+                  <a href="${loginUrl}" style="display: inline-block; background: #f99d1c; color: white; padding: 14px 36px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Login to Admin Portal &rarr;</a>
+                </div>
               </div>
-
-              <p style="color: #64748b; font-size: 13px; margin-bottom: 24px;">
-                Paste this snippet right before the closing &lt;/body&gt; tag on your website to start capturing leads automatically.
-                <a href="${process.env.ADMIN_URL || 'https://admin.hutechsolutions.in'}/docs" style="color: #f99d1c; font-weight: bold; text-decoration: none;">View Installation Guide &rarr;</a>
-              </p>
-
-              <a href="https://admin.hutechsolutions.in/login" style="display: inline-block; background: #f99d1c; color: white; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 14px;">Login to Admin Portal</a>
             </div>
-          `
+          `,
+          attachments: [
+            {
+              filename: 'qrcode.png',
+              content: qrCodeUrl.split('base64,')[1],
+              encoding: 'base64',
+              cid: 'qrcode'
+            }
+          ]
         });
       } catch (emailErr) {
         console.warn("Welcome email notification warning:", emailErr.message);
