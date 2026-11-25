@@ -32,7 +32,8 @@ docker build -t "$IMAGE_NAME" .
 
 echo "Ensuring persistent uploads directory..."
 mkdir -p "$APP_DIR/uploads/resumes" "$APP_DIR/uploads/documents"
-chmod -R 777 "$APP_DIR/uploads"
+chmod 777 "$APP_DIR/uploads" "$APP_DIR/uploads/resumes" "$APP_DIR/uploads/documents" 2>/dev/null || true
+sudo chmod -R 777 "$APP_DIR/uploads" 2>/dev/null || chmod -R 777 "$APP_DIR/uploads" 2>/dev/null || true
 
 echo "Starting container..."
 docker run -d --name "$CONTAINER_NAME" -p 8001:8001 -v "$APP_DIR/uploads:/usr/src/app/uploads" --restart=always --env-file .env "$IMAGE_NAME"
