@@ -125,9 +125,26 @@ async function seedDefaults() {
         role: 'superadmin',
         companyId: null,
         mfaEnabled: false,
+        status: 'active',
+        inviteAccepted: true,
+        mustChangePassword: false,
       });
       console.log('✅ Default Superadmin seeded successfully!');
     }
+
+    // Ensure all existing active users / admins in DB are marked active & inviteAccepted
+    await User.updateMany(
+      { 
+        $or: [
+          { role: 'superadmin' },
+          { mustChangePassword: false }
+        ],
+        status: { $ne: 'inactive' }
+      },
+      { 
+        $set: { status: 'active', inviteAccepted: true } 
+      }
+    );
 
     // Run backfill for any legacy unlinked documents
     await backfillUnassignedRecords();

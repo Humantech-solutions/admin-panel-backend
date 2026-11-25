@@ -32,13 +32,32 @@ exports.getUsers = async (req, res) => {
     const users = await User.find(query).select('-password -mfaSecret');
     const usersWithStatus = users.map(u => {
       const userObj = u.toObject();
+
+      // Platform superadmins and editors are always active
+      if (['superadmin', 'super_editor', 'super_viewer'].includes(userObj.role)) {
+        userObj.status = 'active';
+        return userObj;
+      }
+
+      // If explicitly marked inactive
       if (userObj.status === 'inactive') {
         userObj.status = 'inactive';
-      } else if (userObj.status === 'pending' || userObj.status === 'invited' || !userObj.inviteAccepted || userObj.mustChangePassword) {
-        userObj.status = 'pending';
-      } else {
-        userObj.status = userObj.status || 'active';
+        return userObj;
       }
+
+      // Users who have completed password setup and onboarding are active
+      if (!userObj.mustChangePassword) {
+        userObj.status = 'active';
+        return userObj;
+      }
+
+      // Only unaccepted invited users (with mustChangePassword: true and not yet accepted) are pending
+      if (userObj.status === 'pending' || userObj.status === 'invited' || !userObj.inviteAccepted) {
+        userObj.status = 'pending';
+        return userObj;
+      }
+
+      userObj.status = 'active';
       return userObj;
     });
 

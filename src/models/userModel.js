@@ -27,11 +27,11 @@ const userSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ['pending', 'invited', 'active', 'inactive'],
-    default: 'pending'
+    default: 'active'
   },
   inviteAccepted: {
     type: Boolean,
-    default: false
+    default: true
   },
   accessibleWebsites: [{
     type: mongoose.Schema.Types.ObjectId,
