@@ -3,8 +3,6 @@ const Company = require('../models/companyModel');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const otplib = require('otplib');
-const qrcode = require('qrcode');
 const { sendEmail } = require('../utils/emailUtil');
 
 // Helper to determine if current user is super user
@@ -34,8 +32,10 @@ exports.getUsers = async (req, res) => {
     const users = await User.find(query).select('-password -mfaSecret');
     const usersWithStatus = users.map(u => {
       const userObj = u.toObject();
-      if (!userObj.mfaEnabled && userObj.mustChangePassword) {
-        userObj.status = 'invited';
+      if (userObj.status === 'inactive') {
+        userObj.status = 'inactive';
+      } else if (userObj.status === 'pending' || userObj.status === 'invited' || !userObj.inviteAccepted || userObj.mustChangePassword) {
+        userObj.status = 'pending';
       } else {
         userObj.status = userObj.status || 'active';
       }
@@ -100,32 +100,29 @@ exports.createUser = async (req, res) => {
       if (comp) companyName = comp.name;
     }
 
-    // 1. Generate Google Authenticator TOTP Secret & QR Code
-    const mfaSecret = otplib.generateSecret();
-    const serviceName = process.env.MFA_SERVICE_NAME || `${companyName} Admin`;
-    const otpauth = `otpauth://totp/${encodeURIComponent(serviceName)}:${encodeURIComponent(cleanEmail)}?secret=${mfaSecret}&issuer=${encodeURIComponent(serviceName)}`;
-    const qrCodeUrl = await qrcode.toDataURL(otpauth, { errorCorrectionLevel: 'H', margin: 4, width: 300 });
-
-    // 2. Generate temporary password & hash
+    // 1. Generate temporary password & hash
     const tempPassword = password || crypto.randomBytes(4).toString('hex');
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-    // 3. Save new user with pre-configured Google Authenticator secret
+    // 2. Save new user with pending status until invitation is accepted
     const newUser = new User({
       name: name.trim(),
       email: cleanEmail,
       password: hashedPassword,
       role,
       companyId: targetCompanyId,
-      mfaSecret,
-      mfaEnabled: true,
+      mfaSecret: null,
+      mfaEnabled: false,
+      status: 'pending',
+      inviteAccepted: false,
       mustChangePassword: true, // Force password change on first login
     });
 
     await newUser.save();
     
-    // 4. Construct rich onboarding email with embedded QR scanner and credentials
+    // 3. Construct invitation email (WITHOUT Google Authenticator QR scanner)
     const loginUrl = `${process.env.ADMIN_URL || process.env.FRONTEND_URL || 'https://admin.hutechsolutions.in'}/login`;
+    const acceptInviteUrl = `${loginUrl}?email=${encodeURIComponent(cleanEmail)}&action=accept-invite`;
     const roleDisplayName = role === 'company_admin' ? 'Company Administrator'
       : role === 'company_editor' ? 'Content Editor'
       : role === 'company_viewer' ? 'Viewer (Read-Only)'
@@ -134,10 +131,10 @@ exports.createUser = async (req, res) => {
       : 'Platform Viewer';
 
     const html = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 30px auto; padding: 0; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.06); color: #11253e;">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 30px auto; padding: 0; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.06); color: #11253e;">
         <div style="background: linear-gradient(135deg, #11253e 0%, #1a385c 100%); padding: 36px 32px; text-align: center; color: #ffffff;">
-          <h1 style="margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">Welcome to ${companyName}</h1>
-          <p style="margin: 8px 0 0 0; font-size: 14px; color: #94a3b8;">Admin Portal Access &amp; Two-Factor Security Setup</p>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">Invitation to Join ${companyName}</h1>
+          <p style="margin: 8px 0 0 0; font-size: 14px; color: #94a3b8;">Accept your invitation to join the SahajCRM Admin Portal</p>
         </div>
 
         <div style="padding: 32px 32px 24px 32px;">
@@ -145,59 +142,41 @@ exports.createUser = async (req, res) => {
             Hello <strong>${name.trim()}</strong>,
           </p>
           <p style="font-size: 15px; line-height: 1.6; margin: 0 0 24px 0; color: #475569;">
-            An account has been created for you with the role of <strong>${roleDisplayName}</strong>. Below are your temporary login credentials along with your <strong>Google Authenticator QR Code</strong> to activate Two-Factor Authentication (2FA).
+            You have been invited to join <strong>${companyName}</strong> on the SahajCRM Admin Portal as a <strong>${roleDisplayName}</strong>.
           </p>
 
           <!-- Credentials Box -->
           <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px 24px; margin-bottom: 28px;">
-            <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b;">Your Account Credentials</p>
-            <div style="font-size: 14px; margin-bottom: 8px;"><strong>Login Email:</strong> <span style="color: #11253e;">${cleanEmail}</span></div>
+            <p style="margin: 0 0 12px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b;">Your Login Credentials</p>
+            <div style="font-size: 14px; margin-bottom: 10px;"><strong>Email ID:</strong> <span style="color: #11253e; font-weight: 600;">${cleanEmail}</span></div>
             <div style="font-size: 14px;"><strong>Temporary Password:</strong> <code style="font-family: monospace; font-size: 16px; font-weight: 700; color: #f99d1c; background: #ffffff; padding: 3px 8px; border-radius: 6px; border: 1px solid #e2e8f0;">${tempPassword}</code></div>
           </div>
 
-          <!-- Google Authenticator QR Box -->
-          <div style="background-color: #ffffff; border: 2px solid #f1f5f9; border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 28px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-            <div style="display: inline-block; background-color: #f99d1c; color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 12px; border-radius: 20px; margin-bottom: 12px;">Step 1: Scan with Google Authenticator</div>
-            <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #11253e;">Set Up Two-Factor Authentication</h3>
-            <p style="margin: 0 0 20px 0; font-size: 13px; color: #64748b; line-height: 1.5;">
-              Open the <strong>Google Authenticator</strong> app on your mobile device (or Microsoft Authenticator / Authy), tap the <strong>+ (Add)</strong> button, and scan the QR code below:
-            </p>
-            
-            <div style="display: inline-block; padding: 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 16px;">
-              <img src="cid:qrcode" alt="Google Authenticator QR Code" width="220" height="220" style="display: block; border-radius: 8px;" />
-            </div>
-
-            <p style="margin: 0 0 8px 0; font-size: 12px; color: #64748b;">Can't scan the QR code? Enter this manual setup key into your authenticator app:</p>
-            <div style="font-family: monospace; font-size: 18px; font-weight: 700; color: #11253e; background: #f8fafc; padding: 10px 18px; border: 1px dashed #cbd5e1; border-radius: 8px; display: inline-block; letter-spacing: 4px;">
-              ${mfaSecret}
-            </div>
-          </div>
-
-          <!-- Step 2: Login -->
-          <div style="background-color: #f8fafc; border-radius: 12px; padding: 20px 24px; margin-bottom: 28px;">
-            <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; margin-bottom: 8px;">Step 2: Sign In &amp; Change Password</div>
-            <ol style="margin: 0; padding-left: 20px; font-size: 13px; color: #475569; line-height: 1.7;">
-              <li>Click the button below to open the Admin Portal login page.</li>
-              <li>Sign in using your email and temporary password.</li>
-              <li>When prompted for your 6-digit code, enter the current code from your Google Authenticator app.</li>
-              <li>Set your new permanent password to complete setup.</li>
-            </ol>
-          </div>
-
-          <!-- Action Button -->
-          <div style="text-align: center; margin-bottom: 24px;">
-            <a href="${loginUrl}" style="display: inline-block; background-color: #f99d1c; color: #ffffff; padding: 14px 36px; font-size: 14px; font-weight: 700; text-decoration: none; border-radius: 12px; box-shadow: 0 4px 14px rgba(249, 157, 28, 0.4); text-transform: uppercase; letter-spacing: 0.5px;">
-              Login to Admin Portal &rarr;
+          <!-- Accept Invite Button -->
+          <div style="text-align: center; margin-bottom: 28px;">
+            <a href="${acceptInviteUrl}" style="display: inline-block; background-color: #f99d1c; color: #ffffff; padding: 16px 40px; font-size: 15px; font-weight: 700; text-decoration: none; border-radius: 12px; box-shadow: 0 4px 14px rgba(249, 157, 28, 0.4); text-transform: uppercase; letter-spacing: 0.5px;">
+              Accept Invitation &amp; Log In &rarr;
             </a>
           </div>
 
+          <!-- Next Steps -->
+          <div style="background-color: #f8fafc; border-radius: 12px; padding: 20px 24px; margin-bottom: 28px;">
+            <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; margin-bottom: 10px;">How to Activate Your Account</div>
+            <ol style="margin: 0; padding-left: 20px; font-size: 13px; color: #475569; line-height: 1.8;">
+              <li>Click the <strong>Accept Invitation &amp; Log In</strong> button above.</li>
+              <li>Sign in using your email and temporary password provided above.</li>
+              <li>Set your new permanent password.</li>
+              <li>Scan the on-screen QR code with your <strong>Google Authenticator</strong> app to complete two-factor authentication.</li>
+            </ol>
+          </div>
+
           <p style="font-size: 12px; color: #94a3b8; text-align: center; margin: 0;">
-            If you did not expect this invitation or need assistance, please contact your administrator.
+            Your account status is currently <strong>Pending</strong> and will automatically become <strong>Active</strong> once you accept this invitation and complete your first login.
           </p>
         </div>
 
         <div style="border-top: 1px solid #f1f5f9; padding: 16px 32px; background-color: #fafafa; text-align: center;">
-          <p style="margin: 0; font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">SahajCRM Enterprise Security Layer</p>
+          <p style="margin: 0; font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">SahajCRM Enterprise Security</p>
         </div>
       </div>
     `;
@@ -205,16 +184,8 @@ exports.createUser = async (req, res) => {
     try {
       await sendEmail({
         to: cleanEmail,
-        subject: `Welcome to ${companyName} — Credentials & Google Authenticator Setup`,
-        html,
-        attachments: [
-          {
-            filename: 'qrcode.png',
-            content: qrCodeUrl.split('base64,')[1],
-            encoding: 'base64',
-            cid: 'qrcode'
-          }
-        ]
+        subject: `Invitation to Join ${companyName} — Accept Invite & Set Up Account`,
+        html
       });
     } catch (emailErr) {
       console.warn("⚠️ Invitation email delivery warning:", emailErr.message);
@@ -224,7 +195,7 @@ exports.createUser = async (req, res) => {
     delete userToReturn.password;
     delete userToReturn.mfaSecret;
 
-    res.json({ success: true, message: "User added successfully and setup email sent with Google Authenticator QR Code", user: userToReturn });
+    res.json({ success: true, message: "User added successfully. Invitation sent via email (status: Pending)", user: userToReturn });
   } catch (error) {
     console.error("Create user error:", error);
     res.status(500).json({ success: false, message: "Server error adding collaborator" });

@@ -24,6 +24,15 @@ const userSchema = new mongoose.Schema({
     ref: 'Company',
     default: null
   },
+  status: {
+    type: String,
+    enum: ['pending', 'invited', 'active', 'inactive'],
+    default: 'pending'
+  },
+  inviteAccepted: {
+    type: Boolean,
+    default: false
+  },
   accessibleWebsites: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Website'

@@ -322,11 +322,13 @@ exports.verifyMfa = async (req, res) => {
     // Clear the Email OTP so it can't be reused
     user.emailOtp = "";
 
-    // Mark MFA active if not already
-    if (!user.mfaEnabled) {
-      user.mfaEnabled = true;
-      await user.save();
+    // Mark MFA active and user active upon successful verification
+    user.mfaEnabled = true;
+    if (user.status === 'pending' || !user.inviteAccepted) {
+      user.status = 'active';
+      user.inviteAccepted = true;
     }
+    await user.save();
 
     if (decoded.purpose === 'forgot_password') {
       user.mustChangePassword = true;
@@ -394,6 +396,10 @@ exports.changePassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedPassword;
     user.mustChangePassword = false;
+    if (user.mfaEnabled) {
+      user.status = 'active';
+      user.inviteAccepted = true;
+    }
     await user.save();
 
     res.json({ success: true, message: "Password updated successfully" });
@@ -421,6 +427,10 @@ exports.changePasswordTemp = async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedPassword;
     user.mustChangePassword = false;
+    if (user.mfaEnabled) {
+      user.status = 'active';
+      user.inviteAccepted = true;
+    }
 
     let qrCodeUrl = null;
     if (!user.mfaEnabled) {
