@@ -11,7 +11,13 @@ exports.getUsers = async (req, res) => {
   try {
     let query = {};
     if (isSuper(req.user.role)) {
-      query.companyId = null;
+      if (req.query.companyId && req.query.companyId !== 'all') {
+        query.companyId = req.query.companyId;
+      } else if (req.query.all === 'true') {
+        // Return all users
+      } else {
+        query.companyId = null;
+      }
     } else {
       query.companyId = req.user.companyId;
     }
@@ -35,7 +41,7 @@ exports.getUsers = async (req, res) => {
 // POST /api/users
 exports.createUser = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, companyId } = req.body;
     
     // Check if authorized
     if (req.user.role !== 'superadmin' && req.user.role !== 'company_admin') {
@@ -45,7 +51,7 @@ exports.createUser = async (req, res) => {
     // Validate role
     let validRoles = [];
     if (req.user.role === 'superadmin') {
-      validRoles = ['superadmin', 'super_editor', 'super_viewer'];
+      validRoles = ['superadmin', 'super_editor', 'super_viewer', 'company_admin', 'company_editor', 'company_viewer'];
     } else {
       validRoles = ['company_admin', 'company_editor', 'company_viewer'];
     }
@@ -59,14 +65,20 @@ exports.createUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "User already exists with this email" });
     }
 
-    const tempPassword = crypto.randomBytes(4).toString('hex');
+    // Resolve companyId: company_admin always assigns their own companyId; superadmin can pass companyId
+    let targetCompanyId = null;
+    if (role.startsWith('company_')) {
+      targetCompanyId = req.user.role === 'superadmin' ? (companyId || null) : req.user.companyId;
+    }
+
+    const tempPassword = password || crypto.randomBytes(4).toString('hex');
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
     const newUser = new User({
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
       role,
-      companyId: isSuper(req.user.role) ? null : req.user.companyId,
+      companyId: targetCompanyId,
       mfaEnabled: false,
       mustChangePassword: true, // Force password change on login
     });
