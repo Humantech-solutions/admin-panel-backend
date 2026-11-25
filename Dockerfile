@@ -42,7 +42,7 @@ COPY --chown=nodejs:nodejs . .
 
 # Create necessary directories, fix permissions, and strip Windows CRLF
 # from the startup script (critical on Alpine — \r causes "not found" errors)
-RUN mkdir -p uploads uploads/resumes && \
+RUN mkdir -p uploads uploads/resumes uploads/documents && \
     chown -R nodejs:nodejs /usr/src/app && \
     chmod -R 755 /usr/src/app/uploads && \
     chmod +x scripts/docker-start.sh && \

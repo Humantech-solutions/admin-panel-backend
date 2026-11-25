@@ -52,6 +52,14 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Fallback if an uploaded attachment is not found on disk
+app.use('/uploads', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `File '${req.path.replace(/^\//, '')}' is not found on server storage. It may have been cleared during an earlier container deployment before persistent volumes were configured.`,
+    path: req.path
+  });
+});
 app.use(express.static(path.join(__dirname, '../public')));
 
 // Public CRM Embed Script

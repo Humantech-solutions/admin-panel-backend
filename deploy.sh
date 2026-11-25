@@ -30,8 +30,12 @@ docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
 echo "Building Docker image..."
 docker build -t "$IMAGE_NAME" .
 
+echo "Ensuring persistent uploads directory..."
+mkdir -p "$APP_DIR/uploads/resumes" "$APP_DIR/uploads/documents"
+chmod -R 777 "$APP_DIR/uploads"
+
 echo "Starting container..."
-docker run -d --name "$CONTAINER_NAME" -p 8001:8001 --restart=always --env-file .env "$IMAGE_NAME"
+docker run -d --name "$CONTAINER_NAME" -p 8001:8001 -v "$APP_DIR/uploads:/usr/src/app/uploads" --restart=always --env-file .env "$IMAGE_NAME"
 
 echo "Waiting for container to start..."
 sleep 5
