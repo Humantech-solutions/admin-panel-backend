@@ -136,15 +136,36 @@ async function resolveCompanyAndWebsite(body = {}, req = {}) {
   const companySalesSmtp = (company?.salesSmtp?.user && company?.salesSmtp?.pass) ? company.salesSmtp : null;
   const companyContactSmtp = (company?.contactSmtp?.user && company?.contactSmtp?.pass) ? company.contactSmtp : null;
 
+  const primaryAdminEmail = company?.adminEmail || process.env.SMTP_USER;
+
+  // Combines department routing email with Primary Admin email so Primary Admin always receives all notifications
+  const combineRecipients = (deptEmail) => {
+    const list = [deptEmail, primaryAdminEmail].filter(Boolean);
+    const seen = new Set();
+    const recipients = [];
+    for (const item of list) {
+      const parts = String(item).split(',');
+      for (const p of parts) {
+        const trimmed = p.trim();
+        const lower = trimmed.toLowerCase();
+        if (trimmed && !seen.has(lower)) {
+          seen.add(lower);
+          recipients.push(trimmed);
+        }
+      }
+    }
+    return recipients.join(', ') || primaryAdminEmail;
+  };
+
   return {
     companyId: company ? company._id : undefined,
     websiteId: website ? website._id : undefined,
     companyName: company ? company.name : 'Default Company',
     websiteName: website ? website.name : undefined,
-    adminNotificationEmail: company?.adminEmail || process.env.SMTP_USER,
-    careersNotificationEmail: company?.careersNotificationEmail || company?.adminEmail || process.env.SMTP_USER,
-    salesNotificationEmail: company?.salesNotificationEmail || company?.adminEmail || process.env.SMTP_USER,
-    contactNotificationEmail: company?.contactNotificationEmail || company?.adminEmail || process.env.SMTP_USER,
+    adminNotificationEmail: primaryAdminEmail,
+    careersNotificationEmail: combineRecipients(company?.careersNotificationEmail),
+    salesNotificationEmail: combineRecipients(company?.salesNotificationEmail),
+    contactNotificationEmail: combineRecipients(company?.contactNotificationEmail),
     fromEmailName: company ? (company.fromEmailName || company.name) : (process.env.SMTP_SENDER_NAME || 'Default Company'),
     projectSlug: candidateSlug || (company ? company.slug : 'default'),
     // Department SMTP configurations (cascading: website -> company department -> company admin -> global)

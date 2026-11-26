@@ -1,7 +1,7 @@
 const nodemailer = require('nodemailer');
 const { decrypt } = require('./cryptoUtil');
 
-const sendEmail = async ({ to, subject, html, attachments = [], fromName, smtpConfig = null, replyTo = null }) => {
+const sendEmail = async ({ to, cc = null, bcc = null, subject, html, attachments = [], fromName, smtpConfig = null, replyTo = null }) => {
   try {
     // Determine dynamic vs fallback global SMTP credentials
     const hasCustomSmtp = smtpConfig && smtpConfig.user && smtpConfig.pass;
@@ -29,6 +29,8 @@ const sendEmail = async ({ to, subject, html, attachments = [], fromName, smtpCo
     const mailOptions = {
       from: `"${resolvedFromName}" <${senderEmail}>`,
       to,
+      ...(cc && { cc }),
+      ...(bcc && { bcc }),
       subject,
       html,
       attachments,

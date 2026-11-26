@@ -109,8 +109,8 @@ async function backfillUnassignedRecords() {
  */
 async function seedDefaults() {
   try {
-    const SUPERADMIN_EMAIL = process.env.SUPERADMIN_EMAIL || 'admin@hutechsolutions.in';
-    const SUPERADMIN_PASSWORD = process.env.SUPERADMIN_PASSWORD || 'Admin@123456';
+    const SUPERADMIN_EMAIL = process.env.SUPERADMIN_EMAIL || 'pravat@hutechsolutions.in';
+    const SUPERADMIN_PASSWORD = process.env.SUPERADMIN_PASSWORD || 'Pravat@1978';
     const SUPERADMIN_NAME = process.env.SUPERADMIN_NAME || 'Super Admin';
 
     let superAdmin = await User.findOne({ email: SUPERADMIN_EMAIL });
@@ -134,15 +134,15 @@ async function seedDefaults() {
 
     // Ensure all existing active users / admins in DB are marked active & inviteAccepted
     await User.updateMany(
-      { 
+      {
         $or: [
           { role: 'superadmin' },
           { mustChangePassword: false }
         ],
         status: { $ne: 'inactive' }
       },
-      { 
-        $set: { status: 'active', inviteAccepted: true } 
+      {
+        $set: { status: 'active', inviteAccepted: true }
       }
     );
 
