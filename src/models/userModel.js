@@ -16,7 +16,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['superadmin', 'super_editor', 'super_viewer', 'company_admin', 'company_editor', 'company_viewer'],
+    enum: ['superadmin', 'super_user', 'super_editor', 'super_viewer', 'company_admin', 'company_editor', 'company_viewer'],
     default: 'company_admin'
   },
   companyId: {

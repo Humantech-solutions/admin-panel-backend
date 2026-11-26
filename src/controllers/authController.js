@@ -368,7 +368,7 @@ exports.verifyMfa = async (req, res) => {
         companyId: user.companyId,
         companySlug: companySlug,
         mustChangePassword: user.mustChangePassword || false,
-        needsCompanySetup: !user.companyId && !['superadmin', 'super_editor', 'super_viewer'].includes(user.role)
+        needsCompanySetup: !user.companyId && !['superadmin', 'super_user', 'super_editor', 'super_viewer'].includes(user.role)
       }
     });
   } catch (error) {

@@ -19,7 +19,7 @@ exports.getHierarchyFilter = (req, res) => {
   // Frontend roles: "admin", "manager", "viewer"
   // Backend roles: "superadmin", "super_editor", "super_viewer", "company_admin", "company_editor", "company_user", "viewer"
 
-  if (['superadmin', 'super_editor', 'super_viewer'].includes(req.user.role)) {
+  if (['superadmin', 'super_user', 'super_editor', 'super_viewer'].includes(req.user.role)) {
     // Super roles have full access, no base filter required.
     return { success: true, filter };
   }
@@ -70,7 +70,7 @@ exports.resolveHierarchyAndScopeFilter = async (req, res) => {
   const { company, project, website } = req.query;
 
   // Determine target company from query (if user is superadmin or specifying company)
-  const isSuper = req.user && ['superadmin', 'super_editor', 'super_viewer'].includes(req.user.role);
+  const isSuper = req.user && ['superadmin', 'super_user', 'super_editor', 'super_viewer'].includes(req.user.role);
   const targetCompany = company || (isSuper ? project : undefined);
 
   let resolvedComp = null;

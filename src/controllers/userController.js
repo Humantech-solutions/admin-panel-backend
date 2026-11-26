@@ -6,7 +6,7 @@ const mongoose = require('mongoose');
 const { sendEmail } = require('../utils/emailUtil');
 
 // Helper to determine if current user is super user
-const isSuper = (role) => ['superadmin', 'super_editor', 'super_viewer'].includes(role);
+const isSuper = (role) => ['superadmin', 'super_user', 'super_editor', 'super_viewer'].includes(role);
 
 // GET /api/users
 exports.getUsers = async (req, res) => {
@@ -33,12 +33,6 @@ exports.getUsers = async (req, res) => {
     const usersWithStatus = users.map(u => {
       const userObj = u.toObject();
 
-      // Platform superadmins and editors are always active
-      if (['superadmin', 'super_editor', 'super_viewer'].includes(userObj.role)) {
-        userObj.status = 'active';
-        return userObj;
-      }
-
       // If explicitly marked inactive
       if (userObj.status === 'inactive') {
         userObj.status = 'inactive';
@@ -46,18 +40,18 @@ exports.getUsers = async (req, res) => {
       }
 
       // Users who have completed password setup and onboarding are active
-      if (!userObj.mustChangePassword) {
+      if (!userObj.mustChangePassword && userObj.inviteAccepted) {
         userObj.status = 'active';
         return userObj;
       }
 
       // Only unaccepted invited users (with mustChangePassword: true and not yet accepted) are pending
-      if (userObj.status === 'pending' || userObj.status === 'invited' || !userObj.inviteAccepted) {
+      if (userObj.status === 'pending' || userObj.status === 'invited' || !userObj.inviteAccepted || userObj.mustChangePassword) {
         userObj.status = 'pending';
         return userObj;
       }
 
-      userObj.status = 'active';
+      userObj.status = userObj.status || 'active';
       return userObj;
     });
 
@@ -81,7 +75,7 @@ exports.createUser = async (req, res) => {
     // Validate role
     let validRoles = [];
     if (req.user.role === 'superadmin') {
-      validRoles = ['superadmin', 'super_editor', 'super_viewer', 'company_admin', 'company_editor', 'company_viewer'];
+      validRoles = ['superadmin', 'super_user', 'super_editor', 'super_viewer', 'company_admin', 'company_editor', 'company_viewer'];
     } else {
       validRoles = ['company_admin', 'company_editor', 'company_viewer'];
     }
@@ -98,7 +92,7 @@ exports.createUser = async (req, res) => {
 
     // Resolve companyId: company_admin always assigns their own companyId; superadmin can pass companyId
     let targetCompanyId = null;
-    let companyName = "Hutech CRM";
+    let companyName = "Hutech Solutions Platform";
     if (role.startsWith('company_')) {
       if (req.user.role === 'superadmin') {
         if (companyId) {
@@ -146,7 +140,8 @@ exports.createUser = async (req, res) => {
     const roleDisplayName = role === 'company_admin' ? 'Company Administrator'
       : role === 'company_editor' ? 'Content Editor'
       : role === 'company_viewer' ? 'Viewer (Read-Only)'
-      : role === 'superadmin' ? 'Platform Superadmin'
+      : role === 'superadmin' ? 'Super Admin'
+      : role === 'super_user' ? 'Super User'
       : role === 'super_editor' ? 'Platform Editor'
       : 'Platform Viewer';
 
@@ -250,7 +245,7 @@ exports.updateUser = async (req, res) => {
     if (role) {
       let validRoles = [];
       if (req.user.role === 'superadmin') {
-        validRoles = ['superadmin', 'super_editor', 'super_viewer', 'company_admin', 'company_editor', 'company_viewer'];
+        validRoles = ['superadmin', 'super_user', 'super_editor', 'super_viewer', 'company_admin', 'company_editor', 'company_viewer'];
       } else {
         validRoles = ['company_admin', 'company_editor', 'company_viewer'];
       }
