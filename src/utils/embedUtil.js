@@ -12,7 +12,7 @@ function generateEmbedDetails(websiteSlug, req) {
 
   let frontendUrl = process.env.ADMIN_URL;
   if (!frontendUrl || frontendUrl.includes('localhost') || frontendUrl.includes('127.0.0.1')) {
-    frontendUrl = 'https://admin.hutechsolutions.in';
+    frontendUrl = 'https://admin.hutechsolutions.ai';
   }
 
   return {

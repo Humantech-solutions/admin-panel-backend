@@ -24,9 +24,11 @@ const seedDefaults = require('./utils/seeder');
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
   : [
+      'https://admin.hutechsolutions.ai',
       'https://admin.hutechsolutions.in',
       'https://apis.admin.hutechsolutions.in',
       'http://localhost:3000',
+      'http://localhost:3001',
       'http://localhost:5173',
       'http://localhost:8000',
       'http://localhost:8001'
