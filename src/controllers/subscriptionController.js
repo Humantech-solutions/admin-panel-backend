@@ -58,8 +58,24 @@ exports.subscribe = async (req, res) => {
         subject: `Welcome to ${resolved.companyName} Newsletters!`,
         html
       });
+
+      // 2. Trigger automated notification email to Admin
+      await sendEmail({
+        to: resolved.contactNotificationEmail,
+        fromName: `${resolved.companyName} Admin Portal`,
+        smtpConfig: resolved.contactSmtp,
+        subject: `[${resolved.companyName}] New Newsletter Subscriber: ${email}`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+            <h2 style="color: #11253e; border-bottom: 2px solid #f99d1c; padding-bottom: 10px;">New Newsletter Subscriber</h2>
+            <p style="font-size: 15px; color: #333;">A new user has subscribed to the newsletter:</p>
+            <p style="font-size: 16px; font-weight: bold; color: #11253e; background: #f8f9fa; padding: 12px; border-radius: 6px;">${email}</p>
+            <p style="font-size: 12px; color: #888;">Company: ${resolved.companyName} | Website: ${resolved.websiteName || 'Default'}</p>
+          </div>
+        `
+      });
     } catch (emailErr) {
-      console.error('Failed to send subscription welcome email:', emailErr);
+      console.error('Failed to send subscription email:', emailErr);
     }
 
     res.status(201).json({ success: true, message: 'Subscribed successfully.' });

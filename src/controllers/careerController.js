@@ -203,6 +203,46 @@ exports.submitBrochureRequest = async (req, res) => {
       `
     });
 
+    // 2. Trigger automated notification email to Admin
+    const rawAdminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.ai';
+    const adminUrl = rawAdminUrl.replace(/admin\.hutechsolutions\.in/g, 'admin.hutechsolutions.ai');
+    const adminLink = `${adminUrl}/admin/dashboard/career-mails`;
+
+    await sendEmail({
+      to: resolved.careersNotificationEmail,
+      fromName: `${resolvedCompanyName} Admin Portal`,
+      smtpConfig: resolved.careersSmtp,
+      subject: `[${resolvedCompanyName}] New Careers Brochure Request: ${email}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+          <h2 style="color: #11253e; border-bottom: 2px solid #f99d1c; padding-bottom: 10px;">New Careers Brochure Request Received</h2>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 10px; color: #999; font-size: 12px; text-transform: uppercase; width: 120px;">Name</td>
+              <td style="padding: 10px; color: #11253e; font-weight: bold;">${name || 'Applicant'}</td>
+            </tr>
+            <tr style="background-color: #f9f9f9;">
+              <td style="padding: 10px; color: #999; font-size: 12px; text-transform: uppercase;">Email</td>
+              <td style="padding: 10px; color: #11253e;"><a href="mailto:${email}">${email}</a></td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; color: #999; font-size: 12px; text-transform: uppercase;">Page Title</td>
+              <td style="padding: 10px; color: #11253e;">${pageTitle || 'N/A'}</td>
+            </tr>
+            <tr style="background-color: #f9f9f9;">
+              <td style="padding: 10px; color: #999; font-size: 12px; text-transform: uppercase;">Page URL</td>
+              <td style="padding: 10px; color: #11253e;"><a href="${pageUrl || '#'}" style="color: #f99d1c;">${pageUrl || 'N/A'}</a></td>
+            </tr>
+          </table>
+          <div style="margin-top: 25px; text-align: center;">
+            <a href="${adminLink}" style="background-color: #11253e; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 13px;">View in Admin Portal</a>
+          </div>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+          <p style="font-size: 11px; color: #aaa; text-align: center;">Automated notification sent to ${resolved.careersNotificationEmail}</p>
+        </div>
+      `
+    });
+
     res.json({ success: true, message: "Brochure link sent to your email!" });
   } catch (error) {
     console.error("Brochure error:", error);
