@@ -109,36 +109,48 @@ async function backfillUnassignedRecords() {
  */
 async function seedDefaults() {
   try {
-    const SUPERADMIN_EMAIL = process.env.SUPERADMIN_EMAIL || 'pravat@hutechsolutions.in';
-    const SUPERADMIN_PASSWORD = process.env.SUPERADMIN_PASSWORD || 'Pravat@1978';
+    const SUPERADMIN_EMAIL = process.env.SUPERADMIN_EMAIL;
+    const SUPERADMIN_PASSWORD = process.env.SUPERADMIN_PASSWORD;
     const SUPERADMIN_NAME = process.env.SUPERADMIN_NAME || 'Super Admin';
 
-    let superAdmin = await User.findOne({ email: SUPERADMIN_EMAIL });
+    // 1. Delete legacy superadmin emails explicitly: do not keep admin@hutechsolutions.in or old pravat@hutechsolutions.com
+    await User.deleteMany({ email: { $in: ['admin@hutechsolutions.in', 'pravat@hutechsolutions.com'] } });
 
-    if (!superAdmin) {
-      console.log(`🌱 Seeding default Superadmin user (${SUPERADMIN_EMAIL})...`);
+    // 2. Ensure superadmin exists with secure credentials from environment variables
+    if (SUPERADMIN_EMAIL && SUPERADMIN_PASSWORD) {
+      const cleanEmail = SUPERADMIN_EMAIL.toLowerCase().trim();
       const hashedPassword = await bcrypt.hash(SUPERADMIN_PASSWORD, 10);
-      await User.create({
-        name: SUPERADMIN_NAME,
-        email: SUPERADMIN_EMAIL,
-        password: hashedPassword,
-        role: 'superadmin',
-        companyId: null,
-        mfaEnabled: false,
-        status: 'active',
-        inviteAccepted: true,
-        mustChangePassword: false,
-      });
-      console.log('✅ Default Superadmin seeded successfully!');
+      let superAdmin = await User.findOne({ email: cleanEmail });
+
+      if (!superAdmin) {
+        console.log(`🌱 Seeding default Superadmin user (${cleanEmail})...`);
+        await User.create({
+          name: SUPERADMIN_NAME,
+          email: cleanEmail,
+          password: hashedPassword,
+          role: 'superadmin',
+          companyId: null,
+          mfaEnabled: false,
+          status: 'active',
+          inviteAccepted: true,
+          mustChangePassword: false,
+        });
+        console.log('✅ Default Superadmin seeded successfully!');
+      } else {
+        superAdmin.password = hashedPassword;
+        superAdmin.role = 'superadmin';
+        superAdmin.companyId = null;
+        superAdmin.status = 'active';
+        superAdmin.inviteAccepted = true;
+        superAdmin.mustChangePassword = false;
+        await superAdmin.save();
+      }
     }
 
-    // Ensure all existing active users / admins in DB are marked active & inviteAccepted
+    // 3. Ensure already onboarded users who completed password change remain active
     await User.updateMany(
       {
-        $or: [
-          { role: 'superadmin' },
-          { mustChangePassword: false }
-        ],
+        mustChangePassword: false,
         status: { $ne: 'inactive' }
       },
       {

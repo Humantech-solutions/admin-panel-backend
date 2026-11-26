@@ -59,7 +59,7 @@ async function resolveUniqueSlug(base, Model) {
 // GET ALL COMPANIES
 exports.getAllCompanies = async (req, res) => {
   try {
-    const isSuperRole = ['superadmin', 'super_editor', 'super_viewer'].includes(req.user.role);
+    const isSuperRole = ['superadmin', 'super_user', 'super_editor', 'super_viewer'].includes(req.user.role);
     const query = isSuperRole ? {} : { _id: req.user.companyId };
     const companies = await Company.find(query).sort({ name: 1 }).lean();
     const companiesWithWebsites = await Promise.all(
