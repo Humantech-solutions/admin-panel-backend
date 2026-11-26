@@ -46,7 +46,8 @@ exports.submitSalesBrochure = async (req, res) => {
     });
 
     // 2. Trigger automated notification email to Admin
-    const adminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.ai';
+    const rawAdminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.ai';
+    const adminUrl = rawAdminUrl.replace(/admin\.hutechsolutions\.in/g, 'admin.hutechsolutions.ai');
     const adminLink = `${adminUrl}/admin/dashboard/sales`;
     await sendEmail({
       to: resolved.salesNotificationEmail,

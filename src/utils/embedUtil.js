@@ -13,6 +13,8 @@ function generateEmbedDetails(websiteSlug, req) {
   let frontendUrl = process.env.ADMIN_URL;
   if (!frontendUrl || frontendUrl.includes('localhost') || frontendUrl.includes('127.0.0.1')) {
     frontendUrl = 'https://admin.hutechsolutions.ai';
+  } else {
+    frontendUrl = frontendUrl.replace(/admin\.hutechsolutions\.in/g, 'admin.hutechsolutions.ai');
   }
 
   return {
