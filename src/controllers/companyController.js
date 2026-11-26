@@ -206,7 +206,7 @@ exports.createCompany = async (req, res) => {
       });
 
       // Email credentials & embedded Google Authenticator QR Code
-      const loginUrl = `${process.env.ADMIN_URL || 'https://admin.hutechsolutions.in'}/login`;
+      const loginUrl = `${process.env.ADMIN_URL || 'https://admin.hutechsolutions.ai'}/login`;
       try {
         await sendEmail({
           to: cleanEmail,

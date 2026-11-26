@@ -25,7 +25,7 @@ exports.submitSalesBrochure = async (req, res) => {
     const envBrochure = process.env.SALES_BROCHURE_URL || process.env.BROCHURE_URL;
     const brochureLink = (envBrochure && (envBrochure.startsWith('http') && (envBrochure.includes('.pdf') || envBrochure.includes('.doc'))))
       ? envBrochure
-      : `${envBrochure || 'https://admin.hutechsolutions.in'}/hutech_solutions_brochure.pdf`;
+      : `${envBrochure || 'https://admin.hutechsolutions.ai'}/hutech_solutions_brochure.pdf`;
     await sendEmail({
       to: email,
       fromName: `${resolved.fromEmailName} Sales`,
@@ -46,7 +46,7 @@ exports.submitSalesBrochure = async (req, res) => {
     });
 
     // 2. Trigger automated notification email to Admin
-    const adminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.in';
+    const adminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.ai';
     const adminLink = `${adminUrl}/admin/dashboard/sales`;
     await sendEmail({
       to: resolved.salesNotificationEmail,

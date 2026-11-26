@@ -115,7 +115,7 @@ exports.submitDocumentRequest = async (req, res) => {
     });
 
     // 2. Dispatch alert notification email to Admin (company.adminEmail)
-    const adminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.in';
+    const adminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.ai';
     const adminLink = `${adminUrl}/admin/dashboard/document-requests?project=${resolvedProject}`;
 
     await sendEmail({
