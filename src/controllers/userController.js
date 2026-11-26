@@ -140,7 +140,8 @@ exports.createUser = async (req, res) => {
     await newUser.save();
     
     // 3. Construct invitation email (WITHOUT Google Authenticator QR scanner)
-    const loginUrl = `${process.env.ADMIN_URL || process.env.FRONTEND_URL || 'https://admin.hutechsolutions.ai'}/login`;
+    const rawAdminUrl = process.env.ADMIN_URL || process.env.FRONTEND_URL || 'https://admin.hutechsolutions.ai';
+    const loginUrl = `${rawAdminUrl.replace(/admin\.hutechsolutions\.in/g, 'admin.hutechsolutions.ai')}/login`;
     const acceptInviteUrl = `${loginUrl}?email=${encodeURIComponent(cleanEmail)}&action=accept-invite`;
     const roleDisplayName = role === 'company_admin' ? 'Company Administrator'
       : role === 'company_editor' ? 'Content Editor'

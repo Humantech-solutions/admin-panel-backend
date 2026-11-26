@@ -72,7 +72,8 @@ exports.submitContact = async (req, res) => {
     });
 
     // 2. Trigger automated notification email to admin
-    const adminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.ai';
+    const rawAdminUrl = process.env.ADMIN_URL || 'https://admin.hutechsolutions.ai';
+    const adminUrl = rawAdminUrl.replace(/admin\.hutechsolutions\.in/g, 'admin.hutechsolutions.ai');
     const adminLink = `${adminUrl}/admin/dashboard/contact-form?project=${resolvedProject}${category ? `&category=${encodeURIComponent(category)}` : ""}`;
     
     await sendEmail({
